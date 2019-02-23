@@ -1,0 +1,6 @@
+numpy
+python-utils
+numpy-stl
+pandas
+sklearn
+matplotlib
