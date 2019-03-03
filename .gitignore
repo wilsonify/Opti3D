@@ -158,4 +158,10 @@ dmypy.json
 #pycharm
 .idea/
 
+# large data files
+data/
+
+# literature
+literature/
+
 
