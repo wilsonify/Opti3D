@@ -4,7 +4,7 @@
 
 # jupyter checkpoints
 .ipynb_checkpionts/
-
+.idea/
 # Session Data files
 .RData
 
