@@ -54,7 +54,7 @@ pd.DataFrame.zero_to_null = zero_to_null
 # In[5]:
 
 
-def merge_multi(self, df, on='api', how='left', suffixes=('', 'r')):
+def merge_multi(self, df, **kwargs):
     try:
         left = self.reset_index()
     except ValueError:
@@ -65,10 +65,8 @@ def merge_multi(self, df, on='api', how='left', suffixes=('', 'r')):
     except ValueError:
         right = df.reset_index(drop=True)
 
-    return left.merge(right
-                      , on=on
-                      , how=how
-                      , suffixes=suffixes) \
+    return left.merge(right,
+                      **kwargs) \
         .set_index(self.index.names)
 
 
