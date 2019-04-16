@@ -114,23 +114,37 @@ From our informal evaluations of the applied use of Falcon in additive manufactu
 The parallels between the analytical goals in additive manufacturing and other domains suggest that these capabilities are broadly applicable to many domains as they help users develop and refine a more complete mental model of complicated and large-scale time series data. [@steed2017falcon]
 
 An improved two-phase lattice structure design optimization framework that effectively considers the minimum cross-sectional parameter values that can be fabricated using AM machines is developed in @gorguluarslan2017improved.[@gorguluarslan2017improved]
- An efficient optimization algorithm, namely, the MFD algorithm, is also integrated into the optimization process to considerably reduce the computational cost of the ground structure optimization.[@gorguluarslan2017improved]
- In the first phase, the lattice structure is generated using the mesh information of the structure geometry.[@gorguluarslan2017improved]
- Then, a conventional ground structure optimization process is performed by setting the lower bound of the cross-sectional parameters to near zero with the MFD algorithm.
- In the second phase, the elements with diameters smaller than a pre-determined threshold value are removed from the lattice configuration.[@gorguluarslan2017improved]
- Then, a second optimization procedure is conducted by setting the lower bound of the cross-sectional parameters to the minimum value that can be fabricated using a specific AM machine.[@gorguluarslan2017improved]
- Although the second optimization process might increase the computational cost, the MFD algorithm finds the solution very quickly, making the computational time spent for optimization trivial.[@gorguluarslan2017improved]
- Three different examples are used to show the effectiveness of the optimization framework with the MFD algorithm.[@gorguluarslan2017improved]
- The first example, i.e. the cantilever beam example, is used to show that the proposed framework can produce an optimized structure with minimal computational cost by considering the minimum manufacturing limit.[@gorguluarslan2017improved]
- If the manufacturing constraint is directly used in the ground structure optimization process, the unnecessary elements cannot be removed from the structure and therefore the performance is worse than the obtained one when the proposed method is used, as shown in @gorguluarslan2017improved.[@gorguluarslan2017improved]
- It is also shown that the optimized structure has better performance compared to alternative existing methods.[@gorguluarslan2017improved]
- The second example is used to investigate the minimum diameter value that can be fabricated using the SLS process that will be used for the fabrication of the optimized lattice-based pillar structure.[@gorguluarslan2017improved]
- It is shown that an A-pillar with comparable performance to that of the existing design can be achieved based on the linear FEA results.[@gorguluarslan2017improved]
- The third example was a real-world application of the lattice structure optimization for a seat-bottom frame with a larger number of design variables when compared to the previous examples.[@gorguluarslan2017improved]
- @gorguluarslan2017improved showed that the MFD algorithm can find the optimal solution much faster than the SQP algorithm.[@gorguluarslan2017improved]
- Moreover, it is shown in the second and third examples that the two-phase optimization framework can successfully find an optimized structure that can be fabricated once the minimum value is known for the specific AM machine. [@gorguluarslan2017improved]
+
+An efficient optimization algorithm, namely, the MFD algorithm, is also integrated into the optimization process to considerably reduce the computational cost of the ground structure optimization.[@gorguluarslan2017improved]
+
+In the first phase, the lattice structure is generated using the mesh information of the structure geometry.[@gorguluarslan2017improved]
+
+Then, a conventional ground structure optimization process is performed by setting the lower bound of the cross-sectional parameters to near zero with the MFD algorithm.
+
+In the second phase, the elements with diameters smaller than a pre-determined threshold value are removed from the lattice configuration.[@gorguluarslan2017improved]
+
+Then, a second optimization procedure is conducted by setting the lower bound of the cross-sectional parameters to the minimum value that can be fabricated using a specific AM machine.[@gorguluarslan2017improved]
+
+Although the second optimization process might increase the computational cost, the MFD algorithm finds the solution very quickly, making the computational time spent for optimization trivial.[@gorguluarslan2017improved]
+
+Three different examples are used to show the effectiveness of the optimization framework with the MFD algorithm.[@gorguluarslan2017improved]
+
+The first example, i.e. the cantilever beam example, is used to show that the proposed framework can produce an optimized structure with minimal computational cost by considering the minimum manufacturing limit.[@gorguluarslan2017improved]
 
 
+If the manufacturing constraint is directly used in the ground structure optimization process, the unnecessary elements cannot be removed from the structure and therefore the performance is worse than the obtained one when the proposed method is used, as shown in @gorguluarslan2017improved.[@gorguluarslan2017improved]
+
+It is also shown that the optimized structure has better performance compared to alternative existing methods.[@gorguluarslan2017improved]
+
+The second example is used to investigate the minimum diameter value that can be fabricated using the SLS process that will be used for the fabrication of the optimized lattice-based pillar structure.[@gorguluarslan2017improved]
+
+It is shown that an A-pillar with comparable performance to that of the existing design can be achieved based on the linear FEA results.[@gorguluarslan2017improved] 
+
+The third example was a real-world application of the lattice structure optimization for a seat-bottom frame with a larger number of design variables when compared to the previous examples.[@gorguluarslan2017improved]
+
+@gorguluarslan2017improved showed that the MFD algorithm can find the optimal solution much faster than the SQP algorithm.[@gorguluarslan2017improved]
+
+Moreover, it is shown in the second and third examples that the two-phase optimization framework can successfully find an optimized structure that can be fabricated once the minimum value is known for the specific AM machine. [@gorguluarslan2017improved]
 
 In @zhang2018multi, a multi-scale multi-physics modeling framework for the L-PBF process is presented.[@zhang2018multi]
 
