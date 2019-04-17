@@ -167,3 +167,4 @@ literature/
 # excel
 .~lock*
 
+.Rproj.user
