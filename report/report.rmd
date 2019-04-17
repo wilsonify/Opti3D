@@ -1,5 +1,5 @@
 ---
-title: "Optimization in Additive Manufacturing"
+title: "Optimization of 3D printed objects"
 author: "Claudius Taylor, Tom Wilson, Hong Lin"
 date: "May 2019"
 output: pdf_document
@@ -15,12 +15,26 @@ library('tidyverse')
 
 # Introduction
 
+In manufacturing, work-in-progress, tooling, and prototyping represent the bulk of upfront and ongoing costs. By embracing three dimentional printing technologies, also called additive manufacturing, each of these costs can be eliminated. In this project, we aim to show a generic method for simultaneously optimizing a 3D printable object for both strength and cost. 
+
+
+In @tang2017lattice, a design method of lattice structures under the manufacturability constraints of additive manufacturing process has been proposed.[@tang2017lattice]
+The meta-model obtained from the experiment and artificial neural network has ensured the manufacturability of the lattice structure by certain additive manufacturing process.[@tang2017lattice]
+Then, a second optimization procedure is conducted by setting the lower bound of the cross-sectional parameters to the minimum value that can be fabricated using a specific additive manufacturing machine.[@gorguluarslan2017improved]
+additive manufacturing is one of the most promising technologies in the field of manufacturing. [@majeed2018framework]
+The additive manufacturing technology has a great potential to change the very essence of design and manufacturing. [@majeed2018framework]
+
+The proposed big data-based MP optimization framework for additive manufacturing (BDMP-AM) has been demonstrated in a case study of the application scenario. [@majeed2018framework]
+
+
 <!--
 
-citations look like .[@eberly2002polyhedral]
+citations look like [@eberly2002polyhedral]
 
 inline citation looks like @ryan2018energyconsumption according to @gupta2018opensource.
+
 -->
+
 
 Two important points emphasized in @eberly2002polyhedral are the projection of the polyhedron faces onto the appropriate coordinate planes to avoid numerical problems and reduction using Green’s Theorem to obtain common subexpressions to avoid redundant calculations. [@eberly2002polyhedral]
 
@@ -32,104 +46,80 @@ When the polyhedron faces are triangles, neither projection of the polyhedron fa
 
 A consequence of the formulas as derived in @eberly2002polyhedral is that they require significantly less computational time than Mirtich’s formulas. [@eberly2002polyhedral]
 
-In @chen2016revolution the effect of parameters e.g Thickness of Fill, Fill Rate, Extruder Speed and Extruder Head Temperature are investigated in 3D printing process to study their significance on the response variables of tensile strengths of the 3D printing parts.[@chen2016revolution]
+In @chen2016revolution the effect of parameters e.g Thickness of Fill, Fill Rate, Extruder Speed and Extruder Head Temperature are investigated in three dimensional printing process to study their significance on the response variables of tensile strengths of the three dimensional printing parts.[@chen2016revolution]
 
-The analysis of the results concludes that the process capability indices (Cp and Cpk), can be improved and at the same time optimal parameters can be identified using Six Sigma DMAIC (Define, Measure, Analyze, Improve, and Control) approach which is a win-win situation.[@chen2016revolution] 
 
-3D printing technology has lot of scope in the coming years to conduct experiments, research projects, and process improvements and implications.[@chen2016revolution]
+three dimensional printing technology has lot of scope in the coming years to conduct experiments, research projects, and process improvements and implications.[@chen2016revolution]
 
-Going further, 3D printing is ready to emerge from its niche status and become a viable alternative to conventional manufacturing processes in an increasing number of applications in most businesses and schools. [@chen2016revolution]
+Going further, three dimensional printing is ready to emerge from its niche status and become a viable alternative to conventional manufacturing processes in an increasing number of applications in most businesses and schools. [@chen2016revolution]
 
-In @tang2017lattice, a design method of lattice structures under the manufacturability constraints of AM process has been proposed.[@tang2017lattice]
 
-The meta-model for the selected AM (Additive Manufacturing) process is obtained from experiments and ANN (Artificial Neural Networks). [@tang2017lattice]
+The meta-model for the selected additive manufacturing (Additive Manufacturing) process is obtained from experiments and artificial neural network. [@tang2017lattice]
 
-A BESO(Bidirectional Evolutionary Structural Optimization)-based optimization process is used to find the optimum struts’ thickness distribution.[@tang2017lattice]
+
 
 lattice structures can improve stiffness. [@tang2017lattice]
 
 Von-Mises stress and displacement can be reduced without increasing the volume.[@tang2017lattice]
 
-The heterogeneous lattice structure optimized by the proposed method has a better performance compared to the homogenous lattice structure.[@tang2017lattice]
 
-The meta-model obtained from the experiment and ANN has ensured the manufacturability of the lattice structure by certain AM process.[@tang2017lattice]
 
 If the design domain can be enlarged, smaller strut thickness, performance can be further improved. 
 
 relations between strut dimensions and mechanical properties need to be further investigated.[@tang2017lattice]
 
-relations between strut dimensions and mechanical properties can provide a feedback to lattice simulation and optimization model with more accurate material properties.[@tang2017lattice]
 
-Finally, the process can be optimized to obtain a larger feasible area for design and optimization. [@tang2017lattice]
 
-In @gorguluarslan2017improved, a new framework has been proposed to optimize support structures for additive manufacturing.
 
 The aim of the framework is to sustain all the overhanging areas of a part, leaving aside the deformation and thermo-accumulation issues.
 
 To do so, an initial manufacturable lattice structure is generated under the overhanging areas. [@gorguluarslan2017improved]
 
-Then, a GA (Genetic Algorithm) optimizes an initial manufacturable lattice by removing the maximum number of beams, while ensuring that all the areas to support are still sustained. [@gorguluarslan2017improved]
+
 
 Naturally, working on such tree-like structures also contributes to ease the removal of the external supports during the finishing step. [@gorguluarslan2017improved]
 
-The GA control parameters values the most suited for the LS2DO problem have been selected through a DoE (Design of Experiments).[@gorguluarslan2017improved]
+The genetric algorithm control parameters values the most suited for the LS2DO problem have been selected through a DoE (Design of Experiments).[@gorguluarslan2017improved]
 
-In @gorguluarslan2017improved the support structures of five cases were generated and manufactured. Their volumes have been compared to the ones of support structures generated by several other state-of-the-art strategies, underlining the interest of the developed algorithm in terms of volume optimization.[@gorguluarslan2017improved]
 
-Other approximation or meta-heuristic algorithms could also be used to find an approximate solution to the DST problem and compared to the GA presented in @gorguluarslan2017improved. [@gorguluarslan2017improved] 
+Other approximation or meta-heuristic algorithms could also be used to find an approximate solution to the DST problem and compared to the genetric algorithm presented in @gorguluarslan2017improved. [@gorguluarslan2017improved] 
 
-@gorguluarslan2017improved has shown that using a GA performs better traditional support generation strategies.[@gorguluarslan2017improved]
+@gorguluarslan2017improved has shown that using a genetric algorithm performs better traditional support generation strategies.[@gorguluarslan2017improved]
 
-The computation times have also been compared, and if commercial solutions perform faster but with less optimized volumes, the proposed approach is faster than other academic methods.[@gorguluarslan2017improved]
 
-the convergence of the GA could be further improved.[@gorguluarslan2017improved]
+the convergence of the genetric algorithm could be further improved.[@gorguluarslan2017improved]
 
 For example, a heuristic search could be implemented in order to generate better initial populations, or a quick local search could be done after each crossover and mutation, in order to obtain better child chromosomes.[@gorguluarslan2017improved]
 
-Furthermore, in order to decrease the computation time of the GA, the various overhanging areas could be optimized by stages: once a first quick optimization is completed, the over-hanging areas with no common support structures (two disjoint subgraphs) could be separated in various clusters, and each cluster could be optimized again with a normal optimization.[@gorguluarslan2017improved]
-
-Because each cluster would contain less overhanging areas and fewer initial beams, their optimization would converge exponentially quicker, resulting in a reduced overall computation time.[@gorguluarslan2017improved]
 
 Naturally, such a decomposition strategy could also benefit from an ad-hoc GPU implementation.[@gorguluarslan2017improved]
 
-In order to further improve the optimization of the support structures, the objective function (that only includes the material volume) could be extended, by taking into account the support removal and finishing costs.[@gorguluarslan2017improved]
+
 
 However, these costs can be hard to estimate because they depend on many factors (e.g. the tools used, the training of the operator).[@gorguluarslan2017improved]
 
-Finally, because the deformation and thermal accumulation problems have been left aside, the proposed framework is only a first block in the wide area of support structure optimization.[@gorguluarslan2017improved]
 
-Its coupling with thermo-mechanical optimization algorithms is of interest in the future, in order to generate poly-functional support structures, that can sustain overhangs, rigidify features subject to deformation, and dissipate the thermal accumulation areas of any additively manufactured part.
- [@vaissier2019genetic]
 
-In @gorguluarslan2017improved, we present Falcon, a new system that follows a visual analytics approach to improve knowledge discovery in long and complex time series data with practical applications to the field of additive manufacturing.[@gorguluarslan2017improved]
+
 
 Falcon leverages a human-centered design grounded in the visual information seeking strategy [1].[@gorguluarslan2017improved]
 
-Falcon provides linked visualizations from both temporal and statistical orientations with automated analytics to highlight interesting features. 
+
 
 In addition, Falcon offers intuitive mechanisms to access multiple levels-of-detail as necessary.[@gorguluarslan2017improved]
 
-From our informal evaluations of the applied use of Falcon in additive manufacturing, we have learned that non-visualization experts can be vital members of interdisciplinary design teams as they help design new capabilities that respond to their actual needs, and they quickly employ new visual analytics techniques in creative ways to solve problems.[@gorguluarslan2017improved]
 
-The parallels between the analytical goals in additive manufacturing and other domains suggest that these capabilities are broadly applicable to many domains as they help users develop and refine a more complete mental model of complicated and large-scale time series data. [@steed2017falcon]
 
-An improved two-phase lattice structure design optimization framework that effectively considers the minimum cross-sectional parameter values that can be fabricated using AM machines is developed in @gorguluarslan2017improved.[@gorguluarslan2017improved]
-
-An efficient optimization algorithm, namely, the MFD algorithm, is also integrated into the optimization process to considerably reduce the computational cost of the ground structure optimization.[@gorguluarslan2017improved]
 
 In the first phase, the lattice structure is generated using the mesh information of the structure geometry.[@gorguluarslan2017improved]
 
-Then, a conventional ground structure optimization process is performed by setting the lower bound of the cross-sectional parameters to near zero with the MFD algorithm.
 
 In the second phase, the elements with diameters smaller than a pre-determined threshold value are removed from the lattice configuration.[@gorguluarslan2017improved]
 
-Then, a second optimization procedure is conducted by setting the lower bound of the cross-sectional parameters to the minimum value that can be fabricated using a specific AM machine.[@gorguluarslan2017improved]
+
 
 Although the second optimization process might increase the computational cost, the MFD algorithm finds the solution very quickly, making the computational time spent for optimization trivial.[@gorguluarslan2017improved]
 
-Three different examples are used to show the effectiveness of the optimization framework with the MFD algorithm.[@gorguluarslan2017improved]
-
-The first example, i.e. the cantilever beam example, is used to show that the proposed framework can produce an optimized structure with minimal computational cost by considering the minimum manufacturing limit.[@gorguluarslan2017improved]
 
 
 If the manufacturing constraint is directly used in the ground structure optimization process, the unnecessary elements cannot be removed from the structure and therefore the performance is worse than the obtained one when the proposed method is used, as shown in @gorguluarslan2017improved.[@gorguluarslan2017improved]
@@ -144,7 +134,8 @@ The third example was a real-world application of the lattice structure optimiza
 
 @gorguluarslan2017improved showed that the MFD algorithm can find the optimal solution much faster than the SQP algorithm.[@gorguluarslan2017improved]
 
-Moreover, it is shown in the second and third examples that the two-phase optimization framework can successfully find an optimized structure that can be fabricated once the minimum value is known for the specific AM machine. [@gorguluarslan2017improved]
+
+Moreover, it is shown in the second and third examples that the two-phase optimization framework can successfully find an optimized structure that can be fabricated once the minimum value is known for the specific additive manufacturing machine. [@gorguluarslan2017improved]
 
 In @zhang2018multi, a multi-scale multi-physics modeling framework for the L-PBF process is presented.[@zhang2018multi]
 
@@ -152,142 +143,206 @@ Molecular dynamics model, discrete element, and finite element model were develo
 
 The diffusion of atoms is higher on particle surface than the particle core.[@zhang2018multi]
 
-The calculated activation energy of nickel particle diffusion is 6.10 kJ/mole in the particle core, and 6.24 kJ/mole on the particle surface, which are reasonably in agreement with experimental data 7.89 kJ/mole. [@zhang2018multi]
-
 Atomistic tensile test simulations of sintered material show that sintered nickel particles have lower mechanical strengths than the bulk nickel crystal because of their porous structures. [@zhang2018multi]
- Higher heating rate leads to a higher mechanical strength because of accelerated sintering rates. [@zhang2018multi]
+
+Higher heating rate leads to a higher mechanical strength because of accelerated sintering rates. [@zhang2018multi]
  
- The effect of laser power on the temperature distribution of the powder bed was studied using the DEM. [@zhang2018multi]
- The average temperature in the powder bed increases with higher laser power. [@zhang2018multi]
+The effect of laser power on the temperature distribution of the powder bed was studied using the DEM. [@zhang2018multi]
+
+The average temperature in the powder bed increases with higher laser power. [@zhang2018multi]
  
- The predicted distortion of the L-PBF printed component is in good agreement with experiment. [@zhang2018multi]
+The predicted distortion of the L-PBF printed component is in good agreement with experiment. [@zhang2018multi]
 
+@garechana2019method describes our approach for the detection of core technological solutions—which we call "technology fronts" underlying certain device or broad development (three dimensional printing has been the choice, as explained in the introduction) and the characterization of their dynamics of change across time.[@garechana2019method]
 
-@garechana2019method describes our approach for the detection of core technological solutions—which we call "technology fronts" underlying certain device or broad development (3D printing has been the choice, as explained in the introduction) and the characterization of their dynamics of change across time.[@garechana2019method]
-
-After retrieving a dataset containing 3D printing patents from database Patseer, we designed a text-mining procedure that allowed us to identify the most relevant concepts these patents dealt with, according to the statements contained in their claims.[@garechana2019method]
 
 These terms were crossed with patents to build term-document matrices corresponding to a set of time intervals that span from year 1985 to 2017.[@garechana2019method]
 
-These matrices were analyzed using a topic modeling technique, which has shed light on the technology fronts being developed under the broad field of 3D printing.[@garechana2019method]
 
-We found that some of these fronts are in part coincident with the main taxonomies of typical devices in the 3d printing industry, while others describe "hot points" where engineering efforts are put into practice to improve critical aspect of the devices.[@garechana2019method]
-
-In order to study the behavior of these technology fronts, and considering the data features of transversal developments, we opted for a subsetting strategy based on the gamma values returned by the topic modeling solution for each patent, so we could build sub-datasets containing the patents in which claims were clearly focused on the topics identified by our approach.[@garechana2019method]
- 
-Metrics built on patent data were used to characterize the rate of change of technology fronts, analyzing each of these on a relative basis with respect to the values produced by the rest of the fronts. [@garechana2019method]
+We found that some of these fronts are in part coincident with the main taxonomies of typical devices in the three dimensional printing industry, while others describe "hot points" where engineering efforts are put into practice to improve critical aspect of the devices.[@garechana2019method]
 
 
-AM is one of the most promising technologies in the field of manufacturing. [@majeed2018framework]
-
-The AM technology has a great potential to change the very essence of design and manufacturing. [@majeed2018framework]
-
-During AM processes, a huge amount of real-time big data is generated. [@majeed2018framework]
 
 Fortunately, with the wide use of smart sensing devices, real-time and multi-source data can now be collected. [@majeed2018framework]
 
-@majeed2018framework provides a good basis for the application of BDA in the AM process. [@majeed2018framework]
+In @majeed2018framework, a framework for big data-driven manufacturing process optimization for additive manufacturing has been proposed. [@majeed2018framework]
 
-In @majeed2018framework, a framework for big data-driven manufacturing process optimization for AM has been proposed. [@majeed2018framework]
 
-@majeed2018framework brings three contributions to successfully implement the BDA in the area of AM.  [@majeed2018framework]
-
-The first contribution is the architecture of big data-based analytics and its key components in AM.  [@majeed2018framework]
 
 The second contribution is the big data acquisition and integration method was developed.  [@majeed2018framework]
 
-It can be used to collect the multi-source data for AM, and then process and exchange the big data between heterogeneous EIS.  [@majeed2018framework]
+It can be used to collect the multi-source data for additive manufacturing, and then process and exchange the big data between heterogeneous enterprise information systems.  [@majeed2018framework]
 
-The third contribution is the big data mining and optimization of AM.  [@majeed2018framework]
+The third contribution is the big data mining and optimization of additive manufacturing.  [@majeed2018framework]
 
 The data mining method can be used to reveal the relationship between the production performance and process parameters, and the process parameters can be optimized to improve the production performance. [@majeed2018framework]
- 
- The proposed big data-based MP optimization framework for additive manufacturing (BDMP-AM) has been demonstrated in a case study of the application scenario. [@majeed2018framework]
 
 The real-time data can be acquired and transmitted to the enterprise database. [@majeed2018framework]
 
-With the help of big data and ANOVA, the process parameters of AM have been optimized to minimize the energy consumption, improve the product quality, and improve the production efficiency by minimizing process time. [@majeed2018framework]
-
-The limitation of @majeed2018framework is that only a framework is proposed, and the algorithm for data analysis, such as association, classification and clustering are not studied in @majeed2018framework. [@majeed2018framework]
-
-Future research works will be carried out on the application of @majeed2018framework's framework and development of the algorithm to optimize the parameters of the AM for different materials and processes. [@majeed2018framework]
+With the help of big data and analysis of variance (ANOVA), the process parameters of additive manufacturing have been optimized to minimize the energy consumption, improve the product quality, and improve the production efficiency by minimizing process time. [@majeed2018framework]
 
 
+Future research works will be carried out on the application of @majeed2018framework's framework and development of the algorithm to optimize the parameters of the additive manufacturing for different materials and processes. [@majeed2018framework]
 
-# Data Quality
 
 # Workflow
 
-# Feature Importance
-  
+In @gorguluarslan2017improved, we present Falcon, a new system that follows a visual analytics approach to improve knowledge discovery in long and complex time series data with practical applications to the field of additive manufacturing.[@gorguluarslan2017improved]
+The calculated activation energy of nickel particle diffusion is 6.10 kJ/mole in the particle core, and 6.24 kJ/mole on the particle surface, which are reasonably in agreement with experimental data 7.89 kJ/mole. [@zhang2018multi]
+After retrieving a dataset containing three dimensional printing patents from database Patseer, we designed a text-mining procedure that allowed us to identify the most relevant concepts these patents dealt with, according to the statements contained in their claims.[@garechana2019method]
+In order to study the behavior of these technology fronts, and considering the data features of transversal developments, we opted for a subsetting strategy based on the gamma values returned by the topic modeling solution for each patent, so we could build sub-datasets containing the patents in which claims were clearly focused on the topics identified by our approach.[@garechana2019method]
+During additive manufacturing processes, a huge amount of real-time big data is generated. [@majeed2018framework]
+
+Falcon provides linked visualizations from both temporal and statistical orientations with automated analytics to highlight interesting features. 
+From our informal evaluations of the applied use of Falcon in additive manufacturing, we have learned that non-visualization experts can be vital members of interdisciplinary design teams as they help design new capabilities that respond to their actual needs, and they quickly employ new visual analytics techniques in creative ways to solve problems.[@gorguluarslan2017improved]
+The parallels between the analytical goals in additive manufacturing and other domains suggest that these capabilities are broadly applicable to many domains as they help users develop and refine a more complete mental model of complicated and large-scale time series data. [@steed2017falcon]
+These matrices were analyzed using a topic modeling technique, which has shed light on the technology fronts being developed under the broad field of three dimensional printing.[@garechana2019method]
+Metrics built on patent data were used to characterize the rate of change of technology fronts, analyzing each of these on a relative basis with respect to the values produced by the rest of the fronts. [@garechana2019method]
+@majeed2018framework provides a good basis for the application of big data analytics in the additive manufacturing process. [@majeed2018framework]
+@majeed2018framework brings three contributions to successfully implement the big data analytics in the area of additive manufacturing.  [@majeed2018framework]
+The first contribution is the architecture of big data-based analytics and its key components in additive manufacturing.  [@majeed2018framework]
+
 # Simulation
 
-# Model Limitations
+# Feature Importance
 
-# Regression Analysis
+# Model Limitations
+The limitation of @majeed2018framework is that only a framework is proposed, and the algorithm for data analysis, such as association, classification and clustering are not studied in @majeed2018framework. [@majeed2018framework]
+
+# Modelling
+
+# Optimization
+
+The analysis of the results concludes that the process capability indices (Cp and Cpk), can be improved and at the same time optimal parameters can be identified using Six Sigma DMAIC (Define, Measure, Analyze, Improve, and Control) approach which is a win-win situation.[@chen2016revolution] 
+
+A BESO(Bidirectional Evolutionary Structural Optimization)-based optimization process is used to find the optimum struts’ thickness distribution.[@tang2017lattice]
+
+The heterogeneous lattice structure optimized by the proposed method has a better performance compared to the homogenous lattice structure.[@tang2017lattice]
+Finally, the process can be optimized to obtain a larger feasible area for design and optimization. [@tang2017lattice]
+In @gorguluarslan2017improved, a new framework has been proposed to optimize support structures for additive manufacturing.
+Then, a genetic algorithm optimizes an initial manufacturable lattice by removing the maximum number of beams, while ensuring that all the areas to support are still sustained. [@gorguluarslan2017improved]
+relations between strut dimensions and mechanical properties can provide a feedback to lattice simulation and optimization model with more accurate material properties.[@tang2017lattice]
+In @gorguluarslan2017improved the support structures of five cases were generated and manufactured. Their volumes have been compared to the ones of support structures generated by several other state-of-the-art strategies, underlining the interest of the developed algorithm in terms of volume optimization.[@gorguluarslan2017improved]
+The computation times have also been compared, and if commercial solutions perform faster but with less optimized volumes, the proposed approach is faster than other academic methods.[@gorguluarslan2017improved]
+Furthermore, in order to decrease the computation time of the GA, the various overhanging areas could be optimized by stages: once a first quick optimization is completed, the over-hanging areas with no common support structures (two disjoint subgraphs) could be separated in various clusters, and each cluster could be optimized again with a normal optimization.[@gorguluarslan2017improved]
+Because each cluster would contain less overhanging areas and fewer initial beams, their optimization would converge exponentially quicker, resulting in a reduced overall computation time.[@gorguluarslan2017improved]
+In order to further improve the optimization of the support structures, the objective function (that only includes the material volume) could be extended, by taking into account the support removal and finishing costs.[@gorguluarslan2017improved]
+Finally, because the deformation and thermal accumulation problems have been left aside, the proposed framework is only a first block in the wide area of support structure optimization.[@gorguluarslan2017improved]
+An improved two-phase lattice structure design optimization framework that effectively considers the minimum cross-sectional parameter values that can be fabricated using additive manufacturing machines is developed in @gorguluarslan2017improved.[@gorguluarslan2017improved]
+Its coupling with thermo-mechanical optimization algorithms is of interest in the future, in order to generate poly-functional support structures, that can sustain overhangs, rigidify features subject to deformation, and dissipate the thermal accumulation areas of any additively manufactured part.
+ [@vaissier2019genetic]
+An efficient optimization algorithm, namely, the MFD algorithm, is also integrated into the optimization process to considerably reduce the computational cost of the ground structure optimization.[@gorguluarslan2017improved]
+Then, a conventional ground structure optimization process is performed by setting the lower bound of the cross-sectional parameters to near zero with the MFD algorithm.
+Three different examples are used to show the effectiveness of the optimization framework with the MFD algorithm.[@gorguluarslan2017improved]
+The first example, i.e. the cantilever beam example, is used to show that the proposed framework can produce an optimized structure with minimal computational cost by considering the minimum manufacturing limit.[@gorguluarslan2017improved]
+
+
+# Summary
+
 <!--  briefly refresh the reader's mind as to the variables of interest -->
 
 <!-- Use at least 4 explanatory variables -->
 
+Predictors of tensile strength
 ```{r echo=FALSE}
-data.frame(column = c('variable1',
-                      'variable2'
+data.frame(column = c('wall thickness',
+                      'nozzle temperature',
+                      'infill density',
+                      'layer height',
+                      'fan speed',
+                      'bed temperature',
+                      'print speed',
+                      'infill pattern',
+                      'material'
                       )
-           ,description = c('description1',
-                            'description2'
+           ,description = c('Number of solid layers on surface',
+                            'Extrusion temperature',
+                            'percent of volume to fill with pattern',
+                            'height of each layer',
+                            'speed of cooling fan',
+                            'temperature of platform',
+                            'speed of robot arm',
+                            'pattern of non-solid layers',
+                            'material'
                             )
-           ,units = c('units1',
-                      'units2'
+           ,units = c('# of layers',
+                      '°C',
+                      '%',
+                      'mm',
+                      '% of max',
+                      '°C',
+                      'mm/s',
+                      'Rectilinear or Honeycomb',
+                      'ABS or PLA'
                       )
            ) %>% kable()
 ```
-         
-# Preprocessing
+
+Predictors of Filament usage
+```{r echo=FALSE}
+data.frame(column = c('infill every layers',
+                      'fill density',
+                      'layer height',
+                      'infill extrusion width',
+                      'fill pattern',
+                      'perimeters',
+                      'fill angle'
+                      )
+           ,description = c(' Infill every N layers ',
+                      'volume to fill with pattern',
+                      'height of each layer',
+                      'filament flow width',
+                      'fill pattern',
+                      'horizontal solid layers',
+                      'horizontal infill pattern'
+                            )
+           ,units = c('#',
+                      '%',
+                      'mm',
+                      'mm',
+                      'fill pattern',
+                      'perimeters',
+                      'degrees'
+                      )
+           ) %>% kable()
+```
+
 
 <!-- page break 
 \newpage
 -->
 
-<!-- image link 
-![Predictors](images/01_scatterplot_matrix.png) 
--->
-
-
-
-```{r echo=FALSE}
-data.frame(column = c( 'enrichment1'
-                      ,'enrichment2'
-                      ,'enrichment3'
-                      )
-           ,description = c( 'calculation1',
-                             'calculation2',
-                             'calculation3'
-                             )
-           ,units = c( 'lbs/ft',
-                       'gal/ft',
-                       'lbs/gal'
-                       )
-           ) %>% kable()
-```
-
-
-<!-- image emedded in R for better page management
 ```{r}
-include_graphics('images/02_scatter_plot_new_columns.png')
+include_graphics('../images/tensilepredictedvsactual.png')
 ```
--->
+
+```{r}
+include_graphics('../images/filamentpredictedvsactual.png')
+```
+
+```{r}
+include_graphics('../images/strengthvsfilament.png')
+```
 
 
-# Modelling
+```{r}
+include_graphics('../images/strengthfeatureimportance.png')
+```
+
+```{r}
+include_graphics('../images/filamentfeatureimportance.png')
+```
+
+```{r}
+include_graphics('../images/filldensityevolution.png')
+```
 
 
-# Reduced Model
+```{r}
+include_graphics('../images/optimalgcode.png')
+```
 
 
-# Residual Analysis
-
-
-# Summary
 
 
 # References
