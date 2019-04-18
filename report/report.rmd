@@ -29,7 +29,7 @@ Lattice structures can improve stiffness. [@tang2017lattice]
 
 Von-Mises stress and displacement can be reduced without increasing the volume.[@tang2017lattice]
 
-manufacturability can be ensured by use of experimentation and artificial neural networks.[@tang2017lattice]
+Manufacturability can be ensured by use of experimentation and artificial neural networks.[@tang2017lattice]
 
 
 The lower bound of cross-sectional should be the smallest value that can possible. [gorguluarslan2017improved]
@@ -121,6 +121,11 @@ Metrics built on patent data were used to characterize the rate of change of tec
 The first contribution is the architecture of big data-based analytics and its key components in additive manufacturing.  [@majeed2018framework]
 
 # Simulation and Modeling
+
+```{r}
+include_graphics('../images/Workflow.png')
+```
+
 First we model tensile strength. 
 After applying that model to the metadata, we model filament usage as a function of similar inputs.
 
