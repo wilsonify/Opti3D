@@ -1,14 +1,16 @@
 ---
 title: "Optimization of 3D printed objects"
-author: "Claudius Taylor, Tom Wilson, Hong Lin"
+author: "Claudius Taylor, Tom Wilson, Dr. Hong Lin"
 date: "May 2019"
-output: pdf_document
+output:
+  pdf_document:
+    fig_caption: yes
 bibliography: references.bib
 geometry: margin=2cm
 ---
 
 ```{r setup, include=FALSE, echo=FALSE, message=FALSE}
-knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(echo = FALSE, fig.pos='H')
 library('knitr')
 library('tidyverse')
 ```
@@ -30,22 +32,77 @@ The optimal slicing uses 111.5cm3 of filament with a tensile strenght 27 MPa com
 
 We point our code at a single stl file. Slic3r proveds 144 command line parameters, we loop through every combination of high and low settings for about 9 command-line parameters.  this results in 2 to the 9th power combinations; a full factorial experiment. For each configuration we loop through the non-empty options and construct a command line string. Once the command string is constructed, we run slic3r and check for successful G-Code generation. We extract metadata from the resulting G-Code file. This metatdata output includes the targert parameter filament used in both volume ($cm^3$) and length in mm. During additive manufacturing, a huge amount of real-time big data is generated. [@majeed2018framework]
 
-The process starts with an STL file. there are several software packages that are capable of modeling three-dimensional objects in STL format. We used Blender. our utility will slice a single STL file in many ways. After slicing, we use the metadata from the G-Code files and enrich with strength data which was experimently determined. After optimization the optimal G-Code is constructed into a final command line string and executed by slic3r. Then we can open the G-Code file with software provided by any 3D printer manufacturer. 
+The process starts with an STL file. there are several software packages that are capable of modeling three-dimensional objects in STL format. We used Blender. our utility will slice a single STL file in many ways. After slicing, we use the metadata from the G-Code files and enrich with strength data which was experimently determined. After optimization the optimal G-Code is constructed into a final command line string and executed by slic3r. Then we can open the G-Code file with software provided by any 3D printer manufacturer.
 
-Our machine learning workflow starts by reading in strength data. We create an input matrix, X and an output vector, y. In this case y is tensile strength and X is every available feature except for strength, elongation, and roughness. which would not be available priort to testing strength. We avoid circular reasoning. The X matrix is further divided into numeric and non-numeric features. The non-numeric features are dummy encoded and joined back to the numeric features resulting in an X that is fully numeric and appropriate for machine learning. Upon training a random Forest, we extract the feature importance. Based on the future importance, we select a human determined cutoff for the most important features. We selected the top 4. Then iterate and retrain on just those features. Those 4 features are wall thickness, nozzle temperature, infill density and layer height. To validate the model we inspect the predicted vs. actual an accurate model will fall along the Y equals X line (45 degree line). Further inspecting the residual to ensure that it is normally distributed and centered on zero. We follow a similar process for filament usage. First we have to clean the filament used column by splitting apart the volume used and length used. The result is stripped of units and white space until we have an actual number appropriate for a model output vector. which is now our new y. the X in the case of filament used is all of the metadata except for duplicates of the slic3r parameters and any features which have exactly zero variance. Fitting a random Forest gives us feature portents, we cut off the most important features, 3 this time. retrain then inspect predicted vs. actual and residuals should be normally distributed. In this case of filament usage, there is some non normality at the tails but overall our model is appropriate. Analytical models help develop and refine a more complete mental model of complicated data. [@steed2017falcon] 
+Our machine learning workflow starts by reading in strength data. We create an input matrix, X and an output vector, y. In this case y is tensile strength and X is every available feature except for strength, elongation, and roughness. which would not be available priort to testing strength. We avoid circular reasoning. The X matrix is further divided into numeric and non-numeric features. The non-numeric features are dummy encoded and joined back to the numeric features resulting in an X that is fully numeric and appropriate for machine learning. Upon training a random Forest, we extract the feature importance. Based on the future importance, we select a human determined cutoff for the most important features. We selected the top 4. Then iterate and retrain on just those features. Those 4 features are wall thickness, nozzle temperature, infill density and layer height. To validate the model we inspect the predicted vs. actual an accurate model will fall along the Y equals X line (45 degree line). Further inspecting the residual to ensure that it is normally distributed and centered on zero. We follow a similar process for filament usage. First we have to clean the filament used column by splitting apart the volume used and length used. The result is stripped of units and white space until we have an actual number appropriate for a model output vector. which is now our new y. the X in the case of filament used is all of the metadata except for duplicates of the slic3r parameters and any features which have exactly zero variance. Fitting a random Forest gives us feature portents, we cut off the most important features, 3 this time. retrain then inspect predicted vs. actual and residuals should be normally distributed. In this case of filament usage, there is some non normality at the tails but overall our model is appropriate. Analytical models help develop and refine a more complete mental model of complicated data. [@steed2017falcon]
 
 Defining the cost function involves a lining up inputs of both models, 5 in total, ensuring consistent units and shape. During the cost function we can capture a callbackt o monitor progress of the optimization. we also have an opportunity to weigth the simultaneous optimization. we started with 50/50 weighting. The input to the differential Evolution algorithm is the cost function we just defined along with the boundary condition for each input. we started with the minimum and maximum observed value in our original training data set. the result of our optimization shows that the optimal layer height is 6 fill density is the optimal infill layers is for the optimal wall thickness is 5 the optimal nozzle temperature is 277 degrees. Visualization is a vital componenet of design problem solving. [@gorguluarslan2017improved]
 
+
+
+```{example gcodes, echo=TRUE, fig.cap="\\label{fig:gcodes} example output"}
+; generated by Slic3r 1.2.9 on 2019-04-15 at 19:51:45
+
+; external perimeters extrusion width = 0.60mm
+; perimeters extrusion width = 0.63mm
+; infill extrusion width = 0.63mm
+; solid infill extrusion width = 0.63mm
+; top infill extrusion width = 0.63mm
+
+M107
+M104 S200 ; set temperature
+G28 ; home all axes
+G1 Z5 F5000 ; lift nozzle
+
+M109 S200 ; wait for temperature to be reached
+G21 ; set units to millimeters
+G90 ; use absolute coordinates
+M82 ; use absolute distances for extrusion
+G92 E0
+G1 Z0.350 F7800.000
+G1 E-2.00000 F2400.00000
+G92 E0
+G1 X66.925 Y67.762 F7800.000
+G1 E2.00000 F2400.00000
+G1 X68.677 Y66.283 E2.07096 F1800.000
+G1 X70.830 Y65.490 E2.14192
+G1 X72.009 Y65.384 E2.17858
+G1 X127.991 Y65.384 E3.91071
+G1 X130.250 Y65.781 E3.98168
+G1 X132.238 Y66.925 E4.05264 F1800.000
+G1 X133.717 Y68.677 E4.12360
+G1 X134.510 Y70.830 E4.19456
+G1 X134.616 Y72.009 E4.23121
+```
+
+
+Figure \ref{fig:gcodes} shows an example of the contents of a gcode file.
+
+
+
+Falcon provides linked visualizations from both temporal and statistical orientations with automated analytics to highlight interesting features.
+From our informal evaluations of the applied use of Falcon in additive manufacturing, we have learned that non-visualization experts can be vital members of interdisciplinary design teams as they help design new capabilities that respond to their actual needs, and they quickly employ new visual analytics techniques in creative ways to solve problems.[@gorguluarslan2017improved]
+The parallels between the analytical goals in additive manufacturing and other domains suggest that these capabilities are broadly applicable to many domains as they help users develop and refine a more complete mental model of complicated and large-scale time series data. [@steed2017falcon]
+These matrices were analyzed using a topic modeling technique, which has shed light on the technology fronts being developed under the broad field of three-dimensional printing. [@garechana2019method]
+Metrics built on patent data were used to characterize the rate of change of technology fronts, analyzing each of these on a relative basis with respect to the values produced by the rest of the fronts. [@garechana2019method]
+@majeed2018framework provides a good basis for the application of big data analytics in the additive manufacturing process. [@majeed2018framework]
 @majeed2018framework brings three contributions to successfully implement the big data analytics in the area of additive manufacturing. [@majeed2018framework]
 The first contribution is the architecture of big data-based analytics and its key components in additive manufacturing.  [@majeed2018framework]
 
 # Simulation and Modeling
 
-```{r}
+```{r workflow, echo=FALSE, fig.width=7, fig.height=6, fig.cap="\\label{fig:workflow} workflow diagram"}
 include_graphics('../images/Workflow.png')
 ```
-In this project, we used FlashForge 3D printer to obtain a large cube as a STL file and pass it through a Slic3r to format it as a G-Code. 
+
+<br>
+
+Figure \ref{fig:workflow} shows our workflow.
+
+In this project, we used FlashForge 3D printer to obtain a large cube as a STL file and pass it through a Slic3r to format it as a G-Code.
 We then model tensile strength from a csv file obtain from Kaggle Dataset. After applying that model to our metadata, we model filament usage as a function of similar inputs.
+
+
 
 When we modeled strength, we found that the most important parameter was wall thickness. Extrusion temperature, and fill density were also significantly predictive of tensile strength. Every other parameter we looked at was discarded, the top ten features are summarized here.
 
@@ -86,12 +143,41 @@ data.frame(column = c('wall thickness',
            ) %>% kable()
 ```
 
-```{r}
-include_graphics('../images/strengthfeatureimportance.png')
+
+```{r, echo=TRUE, eval=FALSE}
+for configuration in list(it.product(*configurations.values())):
+    metarow = pd.Series(configuration,index=configurations.keys())
+    output_file_format="[input_filename_base]"
+    print("{} out of {}".format(count+1,total))
+    cmd=["slic3r"]
+
+    for key,value in zip(configurations.keys(),configuration):
+        #print("adding {} with value of {} to cmd".format(key,value))
+        metarow[key]=value
+        if value:
+            cmd.append(str(key))
+            if not isinstance(value,bool):
+                cmd.append(str(value))
+        output_file_format+="_"+flag2placeholder(key)
+
+    cmd.append("--output-filename-format")
+    cmd.append("{count}_{output_file_format}_.gcode".format(count=count,
+                                                            output_file_format=output_file_format
+                                                           )
+              )
+    cmd.append(input_file)
+    metarow = metarow.append(pd.Series(count,index=["filenumber"]))
+    cmd_str=''
+    for arg in cmd:
+        cmd_str += ' '+str(arg)
+    print(cmd_str)
+    try:
+        check_output(cmd)
 ```
 
-```{r}
-include_graphics('../images/tensilepredictedvsactual.png')
+
+```{r strengthfeatureimportance, echo=FALSE, fig.width=5, fig.height=3, fig.cap="\\label{fig:strengthfeatureimportance} relative importance for tensile strength"}
+include_graphics('../images/strengthfeatureimportance.png', auto_pdf = TRUE)
 ```
 
 root mean squared error of 2.05 MPa.
@@ -99,6 +185,13 @@ root mean squared error of 2.05 MPa.
 ```{r}
 include_graphics('../images/strengthresidual.png')
 ```
+Figure \ref{fig:strengthfeatureimportance} shows our the relative importance of the top 10 feature for predicting tensile strength.
+
+```{r tensilepredictedvsactual, echo=FALSE, fig.width=5, fig.height=3, fig.cap="\\label{fig:tensilepredictedvsactual} predicted tensile strength vs actual tensile strength"}
+include_graphics('../images/tensilepredictedvsactual.png', auto_pdf = TRUE)
+```
+
+Figure \ref{fig:tensilepredictedvsactual} shows predicted tensile strength plotted against actual tensile strength
 
 
 Predictors of Filament usage
@@ -130,13 +223,17 @@ data.frame(column = c('infill every layers',
            ) %>% kable()
 ```
 
-```{r}
-include_graphics('../images/filamentfeatureimportance.png')
+```{r filamentfeatureimportance, echo=FALSE, fig.width=5, fig.height=3, fig.cap="\\label{fig:filamentfeatureimportance} relative importance for predicting filament usage"}
+include_graphics('../images/filamentfeatureimportance.png', auto_pdf = TRUE)
 ```
 
-```{r}
-include_graphics('../images/filamentpredictedvsactual.png')
+Figure \ref{fig:filamentfeatureimportance} shows our the relative importance of the top 10 feature for predicting filament usage.
+
+```{r filamentpredictedvsactual, echo=FALSE, fig.width=5, fig.height=3, fig.cap="\\label{fig:filamentpredictedvsactual} predicted filament used vs actual filament used"}
+include_graphics('../images/filamentpredictedvsactual.png' , auto_pdf = TRUE)
 ```
+
+Figure \ref{fig:filamentpredictedvsactual} shows predicted tensile strength plotted against actual tensile strength
 
 root mean squared error of $17.2 cm^3$
 
@@ -152,7 +249,7 @@ Our findings are consist with @chen2016revolution who found thickness of Fill, F
 
 # Model Limitations
 
-There are many failure modes in 3d printing, our approach is limited to meta data available in gcode files. The following table descibes several failure modes that must be consided outside of optimization. 
+There are many failure modes in 3d printing, our approach is limited to meta data available in gcode files. The following table descibes several failure modes that must be consided outside of optimization.
 
 ```{r}
 data.frame(failure = c('overhang',
@@ -204,33 +301,49 @@ It is also shown that the optimized structure has better performance compared to
 
 Looking at a plot of strength vs filament usage we see an opportunity for optimization in the top left corner where using less filament results in reasonably strong object.
 
-```{r}
-include_graphics('../images/strengthvsfilament.png')
+```{r strengthvsfilament, echo=FALSE, fig.width=5, fig.height=3, fig.cap="\\label{fig:strengthvsfilament} predicted filament used vs actual filament used"}
+include_graphics('../images/strengthvsfilament.png' , auto_pdf = TRUE)
 ```
 
+Figure \ref{fig:strengthvsfilament} shows tensile strength plotted against filament usage.
+add more texere
 
-```{r}
-include_graphics('../images/filldensityevolution.png')
+
+
+```{r filldensityevolution, echo=FALSE, fig.width=5, fig.height=3, fig.cap="\\label{fig:filldensityevolution} predicted filament used vs actual filament used"}
+include_graphics('../images/filldensityevolution.png', auto_pdf = TRUE)
 ```
+
+Figure \ref{fig:filldensityevolution} shows how the progress of the optimization algortihm as it converges on the optimal fill density.
+
 
 ## A default slicing:
-```{r}
+```{r nonoptimalslice, echo=FALSE, fig.width=5, fig.height=3, fig.cap="\\label{fig:nonoptimalslice} predicted filament used vs actual filament used"}
 include_graphics('../images/nonoptimalslice.png')
 ```
 
 ## Optimal slicing
 ```{r}
 include_graphics('../images/optimalgcode.png')
+Figure \ref{fig:nonoptimalslice} shows a cross sectional view of default slicing settings.
+
+
+
+```{r optimalgcode, echo=FALSE, fig.width=5, fig.height=3, fig.cap="\\label{fig:optimalgcode} predicted filament used vs actual filament used"}
+include_graphics('../images/optimalgcode.png', auto_pdf = TRUE)
 ```
+
+
+Figure \ref{fig:optimalgcode} shows a cross sectional view of our optimal slicing settings.
+
 
 # Summary
 
-This paper discusses a machine learning method namely Random Forest to evaluate the cost function of filament used to print objects and the resulting tensile strength of that object. The Random Forest resulted in lower cost. For filament usage, we found that the number of skipped layers, infill density and layer height are important. 
+This paper discusses a machine learning method namely Random Forest to evaluate the cost function of filament used to print objects and the resulting tensile strength of that object. The Random Forest resulted in lower cost. For filament usage, we found that the number of skipped layers, infill density and layer height are important.
 
 # Acknowledgements
 
-The completion of this project could not have been possible without the support and understanding of our family. 
-We would also like to thank the Department and a special thanks also to Dr. Hong Lin.
+The completion of this project could not have been possible without the support and understanding of our family. We would also like to thank the Department and a special thanks also to Dr. Hong Lin.
 
 
 \newpage
