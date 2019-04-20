@@ -100,7 +100,7 @@ include_graphics('../images/Workflow.png')
 Figure \ref{fig:workflow} shows our workflow.
 
 In this project, we used FlashForge 3D printer to obtain a large cube as a STL file and pass it through a Slic3r to format it as a G-Code.
-We then model tensile strength from a csv file obtain from Kaggle Dataset. After applying that model to our metadata, we model filament usage as a function of similar inputs.
+We then model tensile strength from a csv file obtain from Kaggle Dataset. [@okudan20183dprinterdataset] After applying that model to our metadata, we model filament usage as a function of similar inputs.
 
 
 
@@ -325,6 +325,8 @@ include_graphics('../images/nonoptimalslice.png')
 ## Optimal slicing
 ```{r}
 include_graphics('../images/optimalgcode.png')
+```
+
 Figure \ref{fig:nonoptimalslice} shows a cross sectional view of default slicing settings.
 
 
