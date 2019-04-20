@@ -15,28 +15,27 @@ library('tidyverse')
 
 # Introduction
 
-In traditional manufacturing, complexity is expensive. The cost of complexity takes the form of work-in-progress, tooling, and time to prototype. These costs can be hard to estimate because they depend on many factors. [@gorguluarslan2017improved] In contrast, in three dimentional printing, complexity is free. There is a clear trade off between the strength of an object and the amount of material used to print the object. In this project, we aim to show a  method for simultaneously optimizing a 3D printable object for both strength and cost. three-dimensional printing is ready to become a viable alternative to conventional manufacturing. [@chen2016revolution]
+In traditional manufacturing, complexity is expensive. The cost of complexity takes the form of work-in-progress, tooling, and time to prototype. These costs can be hard to estimate because they depend on many factors. [@gorguluarslan2017improved] In contrast, in three dimentional printing, complexity is free. There is a clear trade off between the strength of an object and the amount of material used to print the object. In this project, we aim to show a  method for simultaneously optimizing a 3D printable object for both strength and cost. Three-dimensional printing is ready to become a viable alternative to conventional manufacturing. [@chen2016revolution]
+
+The goal of this project is to create an end-to-end flow from STL file to optimal G-Code file. In order to do that we have to design an experiment, slicing the STL file in many different ways. Focusing the infill parameters, we collect the metadata from the g-code output and enrich with some previously collected tensile strength data. Then we can model both the strength of the object and the amount of filament used to print the object. With those models in hand, we define a cost function that is proportional to filament used minus strength. Using a differential evolution algorithm to find the minimum cost. @majeed2018framework provides a good basis for the application of big data analytics in the additive manufacturing process.
 
 Blender is an open-sourced design tool that can output .STL files. STL files specify the surface of a three-dimensional object in terms of triangles on the surface of the object. In the first phase, the lattice structure is generated using the mesh information of the structure geometry. [@gorguluarslan2017improved] A consequence of triangular faces is that they require significantly less computational time because neither projection of the polyhedron faces onto the appropriate coordinate planes nor reduction using Green’s Theorem are necessary. [@eberly2002polyhedral]
 
-Slic3r is an open-sourced tool to convert a model into printing instructions. It creates horizontal slices (layers) and generates tool-paths needed to fill them. It can also calculate the amount of filament to be extruded.
+Slic3r is an open-sourced tool written in perl which can convert an stl model into printing instructions. Gcode format refers to the fact that many robot movements needed for three dimensional printing start with the character 'G'. Slc3r creates horizontal slices (layers) and generates tool-paths needed to fill them. It can also calculate the amount of filament to be extruded.
 
-The goal of this project is to create an end-to-end flow from STL file to optimal G-Code file. In order to do that we have to design an experiment, slicing the STL file in many different ways. Focusing the infill parameters, we collect the metadata from the g-code output and enrich with some previously collected tensile strength data. Then we can model both the strength of the object and the amount of filament used to print the object. With those models in hand, we define a cost function that is proportional to filament used minus strength. Using a differential evolution algorithm to find the minimum cost.
+The result of our optimization shows an optimal layer height at 6, fill density at 46%, fill-every-layers at 5, wall thickness at 5, and nozzle temperature at 277 degrees.
+The optimal slicing uses 111.5cm3 of filament with a tensile strenght 27 MPa compared to 67.2cm3 and 10 MPa for the default slicing parameters.
 
 # Workflow
 
-In @gorguluarslan2017improved, we present Falcon, a new system that follows a visual analytics approach to improve knowledge discovery in long and complex time series data with practical applications to the field of additive manufacturing.[@gorguluarslan2017improved]
-The calculated activation energy of nickel particle diffusion is 6.10 kJ/mole in the particle core, and 6.24 kJ/mole on the particle surface, which are reasonably in agreement with experimental data 7.89 kJ/mole. [@zhang2018multi]
+We point our code at a single stl file. Slic3r proveds 144 command line parameters, we loop through every combination of high and low settings for about 9 command-line parameters.  this results in 2 to the 9th power combinations; a full factorial experiment. For each configuration we loop through the non-empty options and construct a command line string. Once the command string is constructed, we run slic3r and check for successful G-Code generation. We extract metadata from the resulting G-Code file. This metatdata output includes the targert parameter filament used in both volume ($cm^3$) and length in mm. During additive manufacturing, a huge amount of real-time big data is generated. [@majeed2018framework]
 
-In order to study the behavior of these technology fronts, and considering the data features of transversal developments, we opted for a subsetting strategy based on the gamma values returned by the topic modeling solution for each patent, so we could build sub-data sets containing the patents in which claims were clearly focused on the topics identified by our approach.[@garechana2019method]
-During additive manufacturing processes, a huge amount of real-time big data is generated. [@majeed2018framework]
+The process starts with an STL file. there are several software packages that are capable of modeling three-dimensional objects in STL format. We used Blender. our utility will slice a single STL file in many ways. After slicing, we use the metadata from the G-Code files and enrich with strength data which was experimently determined. After optimization the optimal G-Code is constructed into a final command line string and executed by slic3r. Then we can open the G-Code file with software provided by any 3D printer manufacturer. 
 
-Falcon provides linked visualizations from both temporal and statistical orientations with automated analytics to highlight interesting features. 
-From our informal evaluations of the applied use of Falcon in additive manufacturing, we have learned that non-visualization experts can be vital members of interdisciplinary design teams as they help design new capabilities that respond to their actual needs, and they quickly employ new visual analytics techniques in creative ways to solve problems.[@gorguluarslan2017improved]
-The parallels between the analytical goals in additive manufacturing and other domains suggest that these capabilities are broadly applicable to many domains as they help users develop and refine a more complete mental model of complicated and large-scale time series data. [@steed2017falcon]
-These matrices were analyzed using a topic modeling technique, which has shed light on the technology fronts being developed under the broad field of three-dimensional printing. [@garechana2019method]
-Metrics built on patent data were used to characterize the rate of change of technology fronts, analyzing each of these on a relative basis with respect to the values produced by the rest of the fronts. [@garechana2019method]
-@majeed2018framework provides a good basis for the application of big data analytics in the additive manufacturing process. [@majeed2018framework]
+Our machine learning workflow starts by reading in strength data. We create an input matrix, X and an output vector, y. In this case y is tensile strength and X is every available feature except for strength, elongation, and roughness. which would not be available priort to testing strength. We avoid circular reasoning. The X matrix is further divided into numeric and non-numeric features. The non-numeric features are dummy encoded and joined back to the numeric features resulting in an X that is fully numeric and appropriate for machine learning. Upon training a random Forest, we extract the feature importance. Based on the future importance, we select a human determined cutoff for the most important features. We selected the top 4. Then iterate and retrain on just those features. Those 4 features are wall thickness, nozzle temperature, infill density and layer height. To validate the model we inspect the predicted vs. actual an accurate model will fall along the Y equals X line (45 degree line). Further inspecting the residual to ensure that it is normally distributed and centered on zero. We follow a similar process for filament usage. First we have to clean the filament used column by splitting apart the volume used and length used. The result is stripped of units and white space until we have an actual number appropriate for a model output vector. which is now our new y. the X in the case of filament used is all of the metadata except for duplicates of the slic3r parameters and any features which have exactly zero variance. Fitting a random Forest gives us feature portents, we cut off the most important features, 3 this time. retrain then inspect predicted vs. actual and residuals should be normally distributed. In this case of filament usage, there is some non normality at the tails but overall our model is appropriate. Analytical models help develop and refine a more complete mental model of complicated data. [@steed2017falcon] 
+
+Defining the cost function involves a lining up inputs of both models, 5 in total, ensuring consistent units and shape. During the cost function we can capture a callbackt o monitor progress of the optimization. we also have an opportunity to weigth the simultaneous optimization. we started with 50/50 weighting. The input to the differential Evolution algorithm is the cost function we just defined along with the boundary condition for each input. we started with the minimum and maximum observed value in our original training data set. the result of our optimization shows that the optimal layer height is 6 fill density is the optimal infill layers is for the optimal wall thickness is 5 the optimal nozzle temperature is 277 degrees. Visualization is a vital componenet of design problem solving. [@gorguluarslan2017improved]
+
 @majeed2018framework brings three contributions to successfully implement the big data analytics in the area of additive manufacturing. [@majeed2018framework]
 The first contribution is the architecture of big data-based analytics and its key components in additive manufacturing.  [@majeed2018framework]
 
@@ -95,6 +94,11 @@ include_graphics('../images/strengthfeatureimportance.png')
 include_graphics('../images/tensilepredictedvsactual.png')
 ```
 
+root mean squared error of 2.05 MPa.
+
+```{r}
+include_graphics('../images/strengthresidual.png')
+```
 
 
 Predictors of Filament usage
@@ -134,23 +138,21 @@ include_graphics('../images/filamentfeatureimportance.png')
 include_graphics('../images/filamentpredictedvsactual.png')
 ```
 
+root mean squared error of $17.2 cm^3$
+
+```{r}
+include_graphics('../images/filamentresidual.png')
+```
+
 For filming usage, we found that the number of skipped layers, in-fill density and layer height are significantly important. Every other future was discarded. We used a 2nd random Forest to predict filament usage from these three parameters.
 
-Improving the accuracy these models is beyond the scope of this project. 
-
-Looking at a plot of strength vs filament usage we see an opportunity for optimization in the top left corner where using less filament results in reasonably strong object.
 
 
-@chen2016revolution found thickness of Fill, Fill Rate, Extruder Speed and Extruder Head Temperature have an effect on tensile strength.[@chen2016revolution]
+Our findings are consist with @chen2016revolution who found thickness of Fill, Fill Rate, Extruder Speed, and Extruder Head Temperature have an effect on tensile strength.
 
 # Model Limitations
 
-The limitation of @majeed2018framework is that only a framework is proposed, and the algorithm for data analysis, such as association, classification and clustering are not studied in @majeed2018framework. [@majeed2018framework]
-
-To do so, an initial manufacturable lattice structure is generated under the overhanging areas. [@gorguluarslan2017improved]
-
-
-
+There are many failure modes in 3d printing, our approach is limited to meta data available in gcode files. The following table descibes several failure modes that must be consided outside of optimization. 
 
 ```{r}
 data.frame(failure = c('overhang',
@@ -171,15 +173,11 @@ data.frame(failure = c('overhang',
            ) %>% kable()
 ```
 
-Over-hanging areas with no common support structures (two disjoint subgraphs) could be separated in various clusters, and each cluster could be optimized again with a normal optimization. [@gorguluarslan2017improved]
-
 While support structures are outside the scope of this project, @gorguluarslan2017improved provides a framework to optimize support structures for additive manufacturing.
 
 # Optimization
 
-In order to find a minimum cost we can ask a genetic algorithm to modulate these five parameters and search the space. Here we've shown how fill density collapses towards an Optimum just under 50% fill density. 
-
-Looking at a default slicing rectilinear infill pattern and a single wall infill density about 13%, we compared it to our Optimum slicing infill about 50% pattern is Honeycomb and four layers but they use about the same amount of material in order to generate better initial populations. [@gorguluarslan2017improved]
+In order to find a minimum cost we can ask a differential evolution algorithm to modulate these five parameters and search the space. Here we've shown how fill density collapses towards an Optimum just under 50% fill density. Looking at a default slicing rectilinear infill pattern and a single wall infill density about 13%, we compared it to our Optimum slicing infill about 50%.
 
 The analysis of the results concludes that the process capability indices (Cp and Cpk), can be improved and at the same time optimal parameters can be identified using Six Sigma DMAIC (Define, Measure, Analyze, Improve, and Control) approach which is a win-win situation. [@chen2016revolution] 
 
@@ -204,6 +202,7 @@ Moreover, it is shown in the second and third examples that the two-phase optimi
 
 It is also shown that the optimized structure has better performance compared to alternative existing methods. [@gorguluarslan2017improved]
 
+Looking at a plot of strength vs filament usage we see an opportunity for optimization in the top left corner where using less filament results in reasonably strong object.
 
 ```{r}
 include_graphics('../images/strengthvsfilament.png')
@@ -214,24 +213,24 @@ include_graphics('../images/strengthvsfilament.png')
 include_graphics('../images/filldensityevolution.png')
 ```
 
-
+## A default slicing:
 ```{r}
 include_graphics('../images/nonoptimalslice.png')
 ```
 
-
+## Optimal slicing
 ```{r}
 include_graphics('../images/optimalgcode.png')
 ```
 
 # Summary
 
-This paper discusses a machine learning method namely Random Forest to evaluate the cost function of filament used to print objects. The Random Forest not only resulted in lower cost but also shows linearity pattern in the amount of filament used. For filament usage, we found that the number of skipped layers, infill density and layer height are significantly important. 
+This paper discusses a machine learning method namely Random Forest to evaluate the cost function of filament used to print objects and the resulting tensile strength of that object. The Random Forest resulted in lower cost. For filament usage, we found that the number of skipped layers, infill density and layer height are important. 
 
 # Acknowledgements
 
 The completion of this project could not have been possible without the support and understanding of our family. 
-We would also like to thank the Department and a special thanks also to Dr. Hong Lin for proof reading and providing us the opportunity to embark on this project.
+We would also like to thank the Department and a special thanks also to Dr. Hong Lin.
 
 
 \newpage
