@@ -9,7 +9,7 @@ bibliography: references.bib
 geometry: margin=2cm
 ---
 
-```{r setup, include=FALSE, echo=FALSE, message=FALSE}
+```{r setup, include=FALSE,  message=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
 library('knitr')
 library('tidyverse')
@@ -28,7 +28,8 @@ The optimal slicing uses 111.5cm3 of filament with a tensile strength 27 MPa com
 
 # Workflow
 
-```{r workflow, echo=FALSE, fig.cap="(ref:workflowcaption)", out.width='100%', out.height='100%'}
+```{r workflow, fig.align='center', fig.cap="(ref:workflowcaption) workflow diagram ", out.width='100%', out.height='100%'}
+
 include_graphics('../images/Workflow.png')
 ```
 
@@ -101,8 +102,6 @@ G1 X134.616 Y72.009 E4.23121
 
 # Simulation and Modeling
 
-(ref:workflowcaption) workflow diagram 
-
 
 Figure \ref{fig:workflow} shows our workflow.
 
@@ -110,12 +109,63 @@ Figure \ref{fig:workflow} shows our workflow.
 Our machine learning workflow starts by reading in strength data. We create an input matrix, X and an output vector, y. In this case y is tensile strength and X is every available feature except for strength, elongation, and roughness. which would not be available prior to testing strength. We avoid circular reasoning. The X matrix is further divided into numeric and non-numeric features. The non-numeric features are dummy encoded and joined back to the numeric features resulting in an X that is fully numeric and appropriate for machine learning. Upon training a random Forest, we extract the feature importance. Based on the future importance, we select a human determined cutoff for the most important features. We selected the top 4. Then iterate and retrain on just those features. Those 4 features are wall thickness, nozzle temperature, infill density and layer height. To validate the model we inspect the predicted vs. actual an accurate model will fall along the Y equals X line (45 degree line). Further inspecting the residual to ensure that it is normally distributed and centered on zero. We follow a similar process for filament usage. First we have to clean the filament used column by splitting apart the volume used and length used. The result is stripped of units and white space until we have an actual number appropriate for a model output vector. which is now our new y. the X in the case of filament used is all of the metadata except for duplicates of the slic3r parameters and any features which have exactly zero variance. Fitting a random Forest gives us feature portents, we cut off the most important features, 3 this time. retrain then inspect predicted vs. actual and residuals should be normally distributed. In this case of filament usage, there is some non normality at the tails but overall our model is appropriate. Analytical models help develop and refine a more complete mental model of complicated data. [@steed2017falcon]
 
 
-In this project, we used FlashForge 3D printer to obtain a cube as a STL file and pass it through Slic3r to generate machine instructions in G-Code format. We then model tensile strength from data obtain from Kaggle: [@okudan20183dprinterdataset]. After applying that model to our metadata, we model filament usage as a function of similar inputs. 
+In this project, we used FlashForge 3D printer to obtain a cube as a STL file and pass it through Slic3r to generate machine instructions in G-Code format. We then model tensile strength from data obtain from Kaggle: [@okudan20183dprinterdataset]. Researchers at TR/Selcuk University Mechanical Engineering department used a Sincotec GMBH tester to measure the ultimate Tensile Strength (MPa) of objects printed with a variety of input parameters which are described in Table \ref{tab:kaggledata}. After applying that model to our metadata, we model filament usage as a function of similar inputs. 
 
 When we modeled strength, we found that the most important parameter was wall thickness. Extrusion temperature, and fill density were also predictive of tensile strength. Every other parameter was discarded, the top ten features are summarized in Figure \ref{fig:strengthfeatureimportance}.
 
 We used a random forest to predict tensile strength from the four most important parameters (wall thickness, nozzle temperature, infill density, and layer height). We used a 2nd random forest to predict filament usage from the 3 most important parameters (infill every layers, fill density, and layer height). Relations between strut dimensions and mechanical properties can provide a feedback to lattice simulation and optimization model with more accurate material properties. [@tang2017lattice]
 
+
+\newpage
+
+```python
+metadata=pd.Dataframe()
+for configuration in product(*configurations.values())):
+    metarow = pd.Series(configuration,index=configurations.keys())
+    cmd=["slic3r"]
+    for key,value in zip(configurations.keys(),configuration):
+        metarow[key]=value
+        if value:
+            cmd.append(str(key))
+            if not isinstance(value,bool):
+                cmd.append(str(value))
+    cmd.append(input_file)
+    check_output(cmd)
+    with open(gcode_file_path) as gcode_file:
+        for line in gcode_file.readlines():
+            if line.startswith(';'):
+                datum = line.strip('; \n').split('=')
+                if len(datum)==2:
+                    metarow[datum[0]]=datum[1]
+    metadata = metadata.append(metarow,ignore_index=True)
+```
+
+
+
+table \ref{tab:kaggledata} describes the features available to predict tensile strength and their relative importance. Random Forest feature importance scores are calculated based on the average entropy drop due to adding that feature to a random decision tree. 
+
+```{r strengthfeatureimportance,  fig.cap="\\label{fig:strengthfeatureimportance} relative importance for tensile strength", fig.align = 'center', out.width='80%', out.height='80%'}
+
+include_graphics('../images/strengthfeatureimportance.png')
+```
+
+Figure \ref{fig:strengthfeatureimportance} shows our the relative importance of the top 10 feature for predicting tensile strength. 
+
+```{r tensilepredictedvsactual,  fig.align = 'center', fig.cap="\\label{fig:tensilepredictedvsactual} predicted tensile strength vs actual tensile strength", out.width='75%', out.height='75%'}
+
+include_graphics('../images/tensilepredictedvsactual.png')
+```
+
+Figure \ref{fig:tensilepredictedvsactual} shows predicted tensile strength plotted against actual tensile strength with an root mean squared error of 2.4 MPa. 
+
+
+```{r strengthresidual, fig.cap="\\label{fig:strengthresidual} quantile-quantile plot of residual tensile strength", fig.align = 'center', out.width='75%', out.height='75%'}
+
+
+include_graphics('../images/strengthresidual.png')
+```
+
+Figure \ref{fig:strengthresidual} shows that the residual tensile strength is normally distributed, a necessary condistion of a statistically appropriate model.
 
 Predictors of tensile strength
 ```{r kaggledata, echo=FALSE}
@@ -153,52 +203,8 @@ data.frame(column = c('wall thickness',
 ```
 
 
-\newpage
 
-```python
-metadata=pd.Dataframe()
-for configuration in product(*configurations.values())):
-    metarow = pd.Series(configuration,index=configurations.keys())
-    cmd=["slic3r"]
-    for key,value in zip(configurations.keys(),configuration):
-        metarow[key]=value
-        if value:
-            cmd.append(str(key))
-            if not isinstance(value,bool):
-                cmd.append(str(value))
-    cmd.append(input_file)
-    check_output(cmd)
-    with open(gcode_file_path) as gcode_file:
-        for line in gcode_file.readlines():
-            if line.startswith(';'):
-                datum = line.strip('; \n').split('=')
-                if len(datum)==2:
-                    metarow[datum[0]]=datum[1]
-    metadata = metadata.append(metarow,ignore_index=True)
-```
-
-table \ref{tab:kaggledata} describes the features available to predict tensile strength and their relative importance. Random Forest feature importance scores are calculated based on the average entropy drop due to adding that feature to a random decision tree. 
-
-```{r strengthfeatureimportance, echo=FALSE, fig.asp=1, fig.cap="\\label{fig:strengthfeatureimportance} relative importance for tensile strength", out.width='75%', out.height='75%'}
-include_graphics('../images/strengthfeatureimportance.png', auto_pdf = TRUE)
-```
-
-Figure \ref{fig:strengthfeatureimportance} shows our the relative importance of the top 10 feature for predicting tensile strength. 
-
-```{r strengthresidual, out.width='75%', out.height='75%', fig.cap="\\label{fig:strengthresidual} quantile-quantile plot of residual tensile strength"}
-include_graphics('../images/strengthresidual.png')
-```
-
-Figure \ref{fig:strengthresidual} shows that the residual tensile strength is normally distributed, a necessary condistion of a statistically appropriate model.
-
-```{r tensilepredictedvsactual, echo=FALSE, fig.asp=1, fig.cap="\\label{fig:tensilepredictedvsactual} predicted tensile strength vs actual tensile strength", out.width='75%', out.height='75%'}
-include_graphics('../images/tensilepredictedvsactual.png', auto_pdf = TRUE)
-```
-
-Figure \ref{fig:tensilepredictedvsactual} shows predicted tensile strength plotted against actual tensile strength with an root mean squared error of 2.4 MPa. 
-
-
-```{r metadata, echo=FALSE}
+```{r metadata}
 data.frame(column = c('infill every layers',
                       'fill density',
                       'layer height',
@@ -226,23 +232,26 @@ data.frame(column = c('infill every layers',
            ) %>% kable(caption = "Predictors of Filament usage", booktabs=TRUE)
 ```
 
-\ref{metadata} describes the features available to predict filament usage.
+Table \ref{tab:metadata} describes the features available to predict filament usage.
 
-```{r filamentfeatureimportance, echo=FALSE, fig.asp=1, fig.cap="\\label{fig:filamentfeatureimportance} relative importance for predicting filament usage", out.width='75%', out.height='75%'}
-include_graphics('../images/filamentfeatureimportance.png', auto_pdf = TRUE)
+```{r filamentfeatureimportance,  fig.align = 'center', fig.cap="\\label{fig:filamentfeatureimportance} relative importance for predicting filament usage", out.width='80%', out.height='80%'}
+
+include_graphics('../images/filamentfeatureimportance.png')
 ```
 
 Figure \ref{fig:filamentfeatureimportance} shows our the relative importance of the top 10 feature for predicting filament usage.
 
-```{r filamentpredictedvsactual, echo=FALSE, fig.asp=1, fig.cap="\\label{fig:filamentpredictedvsactual} predicted filament used vs actual filament used", out.width='75%', out.height='75%'}
-include_graphics('../images/filamentpredictedvsactual.png' , auto_pdf = TRUE)
+```{r filamentpredictedvsactual,  fig.align = 'center', fig.cap="\\label{fig:filamentpredictedvsactual} predicted filament used vs actual filament used", out.width='75%', out.height='75%'}
+
+include_graphics('../images/filamentpredictedvsactual.png')
 ```
 
 Figure \ref{fig:filamentpredictedvsactual} shows predicted tensile strength plotted against actual tensile strength
 
 root mean squared error of $17.2 cm^3$
 
-```{r filamentresidual, out.width='75%', out.height='75%', fig.cap="\\label{fig:filamentresidual} quantile-quantile plot of residual filament usage"}
+```{r filamentresidual, fig.align = 'center', fig.cap="\\label{fig:filamentresidual} quantile-quantile plot of residual filament usage", out.width='75%', out.height='75%'}
+
 include_graphics('../images/filamentresidual.png')
 ```
 
@@ -254,7 +263,7 @@ For filament usage, we found that the number of skipped layers, in-fill density 
 
 There are many failure modes in 3d printing, our approach is limited to meta data available in gcode files. The following table describes several failure modes that must be considered outside of optimization.
 
-```{r}
+```{r fmea}
 data.frame(failure = c('overhang',
                        'shrinkage',
                        'pillowing',
@@ -279,37 +288,36 @@ While support structures are outside the scope of this project, @gorguluarslan20
 
 Defining the cost function involves a lining up inputs of both models, 5 in total, ensuring consistent units and shape. During the cost function we can capture a callback o monitor progress of the optimization. we also have an opportunity to weight the simultaneous optimization. we started with 50/50 weighting. The input to the differential Evolution algorithm is the cost function we just defined along with the boundary condition for each input. we started with the minimum and maximum observed value in our original training data set. This is consistent with best practice.[@gorguluarslan2017improved] the result of our optimization shows that the optimal layer height is 6 fill density is the optimal infill layers is for the optimal wall thickness is 5 the optimal nozzle temperature is 277 degrees. Visualization is a vital component of design problem solving. [@gorguluarslan2017improved]
 
-```{r strengthvsfilament, echo=FALSE, fig.asp=1, fig.cap="\\label{fig:strengthvsfilament} predicted filament used vs actual filament used", out.width='75%', out.height='75%'}
-include_graphics('../images/strengthvsfilament.png' , auto_pdf = TRUE)
+@gorguluarslan2017improved has shown that using a genetic algorithm performs better traditional generation strategies. In order to find a minimum cost we can ask a differential evolution algorithm to modulate these five parameters and intelligently search the space. In Figure \ref{fig:filldensityevolution} we've shown how fill density collapses towards an optimum just under 50% fill density. The default slicing is rectilinear, single wall, and infill density of 13%, we compared it to our Optimum slicing infill about 50%. Optimization must be repeated once the optimal value is known for a specific machine. [@gorguluarslan2017improved]
+
+
+```{r strengthvsfilament,  fig.align = 'center', fig.cap="\\label{fig:strengthvsfilament} predicted tensile strength vs predicted filament used", out.width='80%', out.height='80%'}
+
+include_graphics('../images/strengthvsfilament.png' )
 ```
 
 Figure \ref{fig:strengthvsfilament} shows tensile strength plotted against filament usage. Looking at \ref{fig:strengthvsfilament} we see an opportunity for optimization in the top left corner where using less filament results in a strong object. Skipping infill layers is an especially important parameter for reducing filament usage while maintaining strength.
 
-@gorguluarslan2017improved has shown that using a genetic algorithm performs better traditional generation strategies. In order to find a minimum cost we can ask a differential evolution algorithm to modulate these five parameters and intelligently search the space. In Figure \ref{fig:filldensityevolution} we've shown how fill density collapses towards an optimum just under 50% fill density. The default slicing is rectilinear, single wall, and infill density of 13%, we compared it to our Optimum slicing infill about 50%. Optimization must be repeated once the optimal value is known for a specific machine. [@gorguluarslan2017improved]
 
+```{r filldensityevolution,  fig.align = 'center', fig.cap="\\label{fig:filldensityevolution} predicted filament used vs actual filament used", out.width='80%', out.height='80%'}
 
-
-
-
-
-
-
-```{r filldensityevolution, echo=FALSE, fig.asp=1, fig.cap="\\label{fig:filldensityevolution} predicted filament used vs actual filament used", out.width='75%', out.height='75%'}
-include_graphics('../images/filldensityevolution.png', auto_pdf = TRUE)
+include_graphics('../images/filldensityevolution.png')
 ```
 
 Figure \ref{fig:filldensityevolution} shows how the progress of the optimization algorithm as it converges on the optimal fill density.
 
 
-```{r nonoptimalslice, echo=FALSE, fig.asp=1, fig.cap="default slicing", out.width='75%', out.height='75%'}
+```{r nonoptimalslice,  fig.align = 'center', fig.cap="default slicing", out.width='75%', out.height='75%'}
+
 include_graphics('../images/nonoptimalslice.png')
 ```
 
 Figure \ref{fig:nonoptimalslice} shows a cross sectional view of default slicing settings.
 
 
-```{r optimalgcode, echo=FALSE, fig.asp=1, fig.cap="\\label{fig:optimalgcode} predicted filament used vs actual filament used", out.width='75%', out.height='75%'}
-include_graphics('../images/optimalgcode.png', auto_pdf = TRUE)
+```{r optimalgcode,  fig.align = 'center', fig.cap="\\label{fig:optimalgcode} predicted filament used vs actual filament used", out.width='75%', sout.height='75%'}
+
+include_graphics('../images/optimalgcode.png')
 ```
 
 Figure \ref{fig:optimalgcode} shows a cross sectional view of our optimal slicing settings.
