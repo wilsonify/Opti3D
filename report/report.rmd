@@ -246,9 +246,7 @@ Figure \ref{fig:filamentfeatureimportance} shows our the relative importance of 
 include_graphics('../images/filamentpredictedvsactual.png')
 ```
 
-Figure \ref{fig:filamentpredictedvsactual} shows predicted tensile strength plotted against actual tensile strength
-
-root mean squared error of $17.2 cm^3$
+Figure \ref{fig:filamentpredictedvsactual} shows predicted tensile strength plotted against actual tensile strength with a root mean squared error of $17.2 cm^3$
 
 ```{r filamentresidual, fig.align = 'center', fig.cap="\\label{fig:filamentresidual} quantile-quantile plot of residual filament usage", out.width='75%', out.height='75%'}
 
@@ -304,7 +302,7 @@ Figure \ref{fig:strengthvsfilament} shows tensile strength plotted against filam
 include_graphics('../images/filldensityevolution.png')
 ```
 
-Figure \ref{fig:filldensityevolution} shows how the progress of the optimization algorithm as it converges on the optimal fill density.
+Figure \ref{fig:filldensityevolution} shows the progress of the optimization algorithm as it converges on the optimum fill density.
 
 
 ```{r nonoptimalslice,  fig.align = 'center', fig.cap="default slicing", out.width='75%', out.height='75%'}
