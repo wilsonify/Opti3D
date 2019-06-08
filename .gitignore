@@ -158,13 +158,12 @@ dmypy.json
 #pycharm
 .idea/
 
-# large data files
-data/
-
 # literature
 literature/
 
 # excel
 .~lock*
 
+# R Studio
 .Rproj.user
+.Rproj
