@@ -13,6 +13,8 @@
 *.DOC	 diff=astextplain
 *.docx diff=astextplain
 *.DOCX diff=astextplain
+*.xlsx diff=astextplain
+*.XLSX diff=astextplain
 *.dot  diff=astextplain
 *.DOT  diff=astextplain
 *.pdf  diff=astextplain
@@ -30,17 +32,24 @@
 
 # Graphics
 *.png binary
+*.PNG binary
 *.jpg binary
+*.JPG binary
 *.jpeg binary
+*.JPEG binary
 *.gif binary
+*.GIF binary
 *.tif binary
 *.tiff binary
 *.ico binary
-# SVG treated as an asset (binary) by default. If you want to treat it as text,
-# comment-out the following line and uncomment the line after.
-*.svg binary
-#*.svg text
+*.svg text
 *.eps binary
+
+# compressed
+*.zip binary
+*.7z binary
+*.gz binary
+
 
 # Basic .gitattributes for a python repo.
 
@@ -51,12 +60,16 @@
 *.py3 		text diff=python
 *.pyw 		text diff=python
 *.pyx  		text diff=python
+*.c text
+*.h text
+*.ipynb text
 
 # Binary files
 # ============
 *.db		binary
 *.p 		binary
 *.pkl 		binary
+*.pickle    binary
 *.pyc 		binary
 *.pyd		binary
 *.pyo 		binary
@@ -65,7 +78,6 @@
 # with the python modules ``pickle``, ``dbm.*``,
 # ``shelve``, ``marshal``, ``anydbm``, & ``bsddb``
 # (among others).
-
 
 
 # Basic .gitattributes for a R repo.
@@ -78,4 +90,5 @@
 *.Rd        text
 *.Rdx       binary
 *.Rmd		text
-*.R text
+*.r         text
+*.R         text
