@@ -8,7 +8,7 @@ setup(
     name='stldeli',
     version='0.0.0',
     packages=find_packages(),
-    package_dir={'': 'src'},
+    package_dir={'': '.'},
     url='',
     license='MIT',
     author='Tom Wilson',
