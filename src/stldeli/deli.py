@@ -9,43 +9,57 @@ import glob
 import itertools as it
 import logging
 import os
-from logging.config import dictConfig
-from subprocess import check_output, CalledProcessError
+from logging.config import dictConfig  # pylint: disable=ungrouped-imports
+from subprocess import CalledProcessError, check_output
 
 import pandas as pd
-
-import config
+from stldeli import config
 
 
 def flag2placeholder(flag):
-    logging.info("flag2placeholder")
+    """
+    convert a flag into valid commandline argument
+    :param flag:
+    :return:
+    """
+    logging.debug("flag2placeholder")
     flag_str = str(flag)
     flag_str_clean = flag_str.strip("-").replace("-", "_")
     return flag_str_clean + "[" + flag_str_clean + "]"
 
 
 def get_combinations_from_configurations(configurations):
+    """
+    convert configured dict into a generator of all possible tuples
+    :param configurations:
+    :return:
+    """
     logging.info("get_combinations_from_configurations")
     return it.product(*(configurations[Name] for Name in configurations))
 
 
+# pylint: disable=too-many-locals
 def main():
+    """
+    main function
+    :return: dataframe of metadata
+    """
     logging.info("main")
-    combinations = get_combinations_from_configurations(config.configurations)
+    combinations = get_combinations_from_configurations(config.slic3r_configurations)
     total = len(list(combinations))
     logging.info("{} possible slices".format(total))
 
     count = 0
     _metadata = pd.DataFrame()
     input_file = os.path.abspath("stl_files/largecube.stl")
-    for configuration in list(it.product(*config.configurations.values())):
-        logging.debug("configuration  = ".format(configuration))
-        metarow = pd.Series(configuration, index=config.configurations.keys())
+    for configuration in list(it.product(*config.slic3r_configurations.values())):
+        logging.debug("configuration  = {}".format(configuration))
+        metarow = pd.Series(configuration, index=config.slic3r_configurations.keys())
         output_file_format = "[input_filename_base]"
         print("{} out of {}".format(count + 1, total))
         cmd = ["slic3r"]
 
-        for key, value in zip(config.configurations.keys(), configuration):
+        for key, value in zip(config.slic3r_configurations.keys(), configuration):
             logging.debug("adding {} with value of {} to cmd".format(key, value))
             metarow[key] = value
             if value:
@@ -77,15 +91,15 @@ def main():
                 os.remove(gcode_file_path)
             _metadata = _metadata.append(metarow, ignore_index=True)
             count += 1
-        except CalledProcessError as e:
-            print("unable to slice with error: {}".format(e))
+        except CalledProcessError as error_message:
+            print("unable to slice with error: {}".format(error_message))
             continue
 
     return _metadata
 
 
 if __name__ == '__main__':
-    os.makedirs(config.log_dir, exist_ok=True)
-    dictConfig(config.log_dict_config)
-    metadata = main()
+    os.makedirs(config.LOG_DIR, exist_ok=True)
+    dictConfig(config.LOG_DICT_CONFIG)
+    metadata = main()  # pylint: disable=invalid-name
     metadata.to_csv('metadata.csv')
