@@ -1,9 +1,13 @@
+"""
+configuration script imported by other modules
+"""
+
 import os
 
-log_dir = 'logs'
-log_file = os.path.join(log_dir, 'deli.log')
+LOG_DIR = 'logs'
+LOG_FILE = os.path.join(LOG_DIR, 'deli.log')
 
-log_dict_config = {
+LOG_DICT_CONFIG = {
     'version': 1,
     'formatters': {
         'default': {
@@ -19,7 +23,7 @@ log_dict_config = {
         'file': {
             'class': 'logging.FileHandler',
             'formatter': 'default',
-            'filename': log_file,
+            'filename': LOG_FILE,
             'level': 'DEBUG',
         },
     },
@@ -29,7 +33,8 @@ log_dict_config = {
     },
 }
 
-configurations = {
+# pylint: disable=invalid-name
+slic3r_configurations = {
     # "--nozzle-diameter":[0.5,1.0],
     # "--use-firmware-retraction":[True,False],
     # "--use-volumetric-e":[True,False],
