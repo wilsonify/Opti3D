@@ -1,8 +1,10 @@
 import os
 
 log_dir = 'logs'
+log_file = os.path.join(log_dir, 'deli.log')
 
 log_dict_config = {
+    'version': 1,
     'formatters': {
         'default': {
             'format': '%(asctime)s | %(levelname)s | %(filename)s | %(name)s | %(lineno)d | %(message)s'
@@ -10,15 +12,15 @@ log_dict_config = {
     },
     'handlers': {
         'console': {
-            'level': 'DEBUG',
             'class': 'logging.StreamHandler',
-            'formatter': 'default'
+            'formatter': 'default',
+            'level': 'DEBUG',
         },
         'file': {
-            'level': 'DEBUG',
-            'class': ' logging.FileHandler',
+            'class': 'logging.FileHandler',
             'formatter': 'default',
-            'filename': os.path.join(log_dir, 'deli.log'),
+            'filename': log_file,
+            'level': 'DEBUG',
         },
     },
     'root': {
