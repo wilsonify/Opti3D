@@ -221,11 +221,7 @@ def main():
         _filament = filament_regressor_rf.predict(x_filament.values.reshape(1, -1))
         cost = 0.5 * _filament / average_filament - 0.5 * _strength / average_strength
 
-        global evolution_df  # pylint: disable=global-variable-undefined,invalid-name
-        global iteration  # pylint: disable=global-variable-undefined,invalid-name
-
-        row = pd.Series(np.append(input_array,
-                                  (iteration, cost)), # pylint: disable=used-before-assignment
+        row = pd.Series(np.append(input_array, cost),  # pylint: disable=used-before-assignment
                         index=('layer_height',
                                'fill_density',
                                'infill_every_layers',
@@ -234,8 +230,7 @@ def main():
                                'iteration',
                                'cost'
                                ))
-        evolution_df = evolution_df.append(row, ignore_index=True)  # pylint: disable=used-before-assignment
-        iteration += 1
+        print(row)
 
         return cost
 
@@ -264,16 +259,6 @@ def main():
                                     )
 
     logging.info(result.x, result.fun)
-
-    for column in evolution_df.columns:
-        sns.lmplot(y=column,
-                   x='iteration',
-                   data=evolution_df,
-                   lowess=True,
-                   # scatter_kws={'color':'greys'},
-                   line_kws={'color': 'r'},
-                   aspect=1.618
-                   )
 
     cost_function(np.array([0.57153236,
                             46.12917446,
