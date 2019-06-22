@@ -192,7 +192,7 @@ def main():
     average_filament = metadata_enriched['filament_used_cm3'].mean()
     average_strength = metadata_enriched['tensile_strength_predicted'].mean()
 
-    def cost_function(input_array):
+    def cost_function(input_array, progress_df):
         """
         layer_height,
         fill_density,
@@ -230,11 +230,11 @@ def main():
                                'iteration',
                                'cost'
                                ))
-        print(row)
+        progress_df.append(row)
 
         return cost
 
-    cost_function(np.array([0.02, 10.00, 1, 1, 200]))
+    cost_function(np.array([0.02, 10.00, 1, 1, 200]), pd.DataFrame())
 
     bounds = [(0.02, 0.8),  # layer_height
               (10.0, 90.0),  # fill_density
@@ -243,8 +243,10 @@ def main():
               (200, 300)  # nozzle_temperature
               ]
 
+    iterations_df = pd.DataFrame()
     result = differential_evolution(cost_function,
                                     bounds,
+                                    args=(iterations_df)
                                     # strategy='rand2exp',
                                     # maxiter=1000,
                                     # popsize=25,
@@ -265,7 +267,7 @@ def main():
                             4.29097592,
                             4.92265957,
                             276.59808607]
-                           )
+                           ), iterations_df
                   )
 
     metadata_enriched.to_csv('metadata_enriched.csv')
