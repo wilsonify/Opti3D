@@ -94,7 +94,7 @@ def main():
         print(cmd_str)
         try:
             check_output(cmd)
-            metarow = get_series_from_gcode(gcode_file_path)
+            metarow = pd.concat([metarow,get_series_from_gcode(gcode_file_path)],axis=1)
             os.remove(gcode_file_path)
             _metadata = _metadata.append(metarow, ignore_index=True)
             count += 1
