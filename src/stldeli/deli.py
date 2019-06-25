@@ -38,6 +38,17 @@ def get_combinations_from_configurations(configurations):
     return it.product(*(configurations[Name] for Name in configurations))
 
 
+def get_series_from_gcode(gcode_file_path):
+    metarow = pd.Series()
+    with open(gcode_file_path) as gcode_file:
+        for line in gcode_file.readlines():
+            if line.startswith(';'):
+                datum = line.strip('; \n').split('=')
+                if len(datum) == 2:
+                    metarow[datum[0]] = datum[1]
+    return metarow
+
+
 # pylint: disable=too-many-locals
 def main():
     """
@@ -69,10 +80,12 @@ def main():
             output_file_format += "_" + flag2placeholder(key)
 
         cmd.append("--output-filename-format")
-        cmd.append("{count}_{output_file_format}_.gcode".format(count=count,
-                                                                output_file_format=output_file_format
-                                                                )
-                   )
+        gcode_file_path = "{count}_{output_file_format}_.gcode" \
+            .format(
+            count=count,
+            output_file_format=output_file_format
+        )
+        cmd.append(gcode_file_path)
         cmd.append(input_file)
         metarow = metarow.append(pd.Series(count, index=["filenumber"]))
         cmd_str = ''
@@ -81,14 +94,8 @@ def main():
         print(cmd_str)
         try:
             check_output(cmd)
-            for gcode_file_path in glob.glob('stl_files//*.gcode'):
-                with open(gcode_file_path) as gcode_file:
-                    for line in gcode_file.readlines():
-                        if line.startswith(';'):
-                            datum = line.strip('; \n').split('=')
-                            if len(datum) == 2:
-                                metarow[datum[0]] = datum[1]
-                os.remove(gcode_file_path)
+            metarow = get_series_from_gcode(gcode_file_path)
+            os.remove(gcode_file_path)
             _metadata = _metadata.append(metarow, ignore_index=True)
             count += 1
         except CalledProcessError as error_message:
