@@ -15,6 +15,7 @@ from scipy import stats
 from scipy.optimize import differential_evolution
 from sklearn.ensemble import RandomForestRegressor  # pylint: disable=ungrouped-imports
 from sklearn.linear_model import LinearRegression  # pylint: disable=ungrouped-imports
+from stldeli import config
 
 
 # pylint: disable=too-many-statements,too-many-locals
@@ -23,32 +24,16 @@ def main():
     main
     :return:
     """
-    plt.rcParams.update({'font.size': 22})
 
     data = pd.read_csv("data.csv").clean_column_names()
 
-    for column in data.columns:
-        logging.info(column)
-        logging.info(np.sort(data[column].unique()))
-
-    important_features = ['layer_height',
-                          'infill_density',
-                          'nozzle_temperature',
-                          'wall_thickness'
-                          ]
-
     y_df = data[data.columns.intersection(['tension_strength'])]
-    # x = data[data.columns.difference(['tension_strength','elongation','roughness'])]
-    x_df = data[important_features]
-    # x = pd.get_dummies(x_nonnumeric).join(x_numeric)
+    x_df = data[config.important_features]
 
     logging.info(x_df.columns)
 
     strength_regressor_rf = RandomForestRegressor()
     strength_regressor_rf.fit(x_df, y_df.values.reshape(-1))
-
-    strength_regressor_linear = LinearRegression()
-    strength_regressor_linear.fit(x_df, y_df.values.reshape(-1))
 
     feature_importance = pd.concat([pd.Series(strength_regressor_rf.feature_importances_, name='importance'),
                                     pd.Series(x_df.columns, name='feature')
@@ -88,23 +73,11 @@ def main():
 
     stats.probplot(strength_residual, dist="norm", plot=plt)
 
-    pd.concat([pd.Series(strength_regressor_linear.predict(x_df), name='predicted'),
-               pd.Series(y_df.values.reshape(-1), name='actual')
-               ], axis=1
-              ).plot.scatter(x='actual', y='predicted')
-
     metadata = pd.read_csv('metadata.csv')
 
     metadata.info()
 
-    strength_controllable_parameters = [
-        '--layer-height',  # layer_height
-        '--fill-density',  # infill_density
-        '--temperature',  # nozzle_temperature
-        '--solid-layers'  # wall_thickness
-    ]
-
-    newx = metadata[strength_controllable_parameters]
+    newx = metadata[config.strength_controllable_parameters]
 
     tensile = strength_regressor_rf.predict(newx)
     tensile_series = pd.Series(tensile, name='tensile_strength_predicted')
@@ -143,13 +116,8 @@ def main():
     figure.axes[0, 0].set_xlabel('filament used ($cm^3$)')
     figure.axes[0, 0].set_ylabel('tensile strength (MPa)')
 
-    filament_controllable_parameters = ['--infill-every-layers',
-                                        '--fill-density',
-                                        '--layer-height',
-                                        ]
-
     y_df = metadata_enriched[metadata_enriched.columns.intersection(['filament_used_cm3'])]
-    x_df = metadata_enriched[filament_controllable_parameters]
+    x_df = metadata_enriched[config.filament_controllable_parameters]
 
     y_df.plot.hist(legend=False)
 
@@ -167,12 +135,13 @@ def main():
 
     _, axis = plt.subplots(nrows=1, ncols=1, figsize=(8, 8))
 
-    feature_importance.dropna()[-10:].plot.barh(x='feature',
-                                                y='importance',
-                                                color='grey',
-                                                legend=False,
-                                                ax=axis
-                                                )
+    feature_importance.dropna()[-10:].plot.barh(
+        x='feature',
+        y='importance',
+        color='grey',
+        legend=False,
+        ax=axis
+    )
 
     axis.set_xlabel('relative importance')
     axis.set_ylabel('')
@@ -206,16 +175,18 @@ def main():
          wall_thickness,
          nozzle_temperature) = input_array
 
-        x_strength = pd.Series({'layer_height': layer_height,
-                                'fill_density': fill_density,
-                                'wall_thickness': wall_thickness,
-                                'nozzle_temperature': nozzle_temperature}
-                               )
+        x_strength = pd.Series(
+            {'layer_height': layer_height,
+             'fill_density': fill_density,
+             'wall_thickness': wall_thickness,
+             'nozzle_temperature': nozzle_temperature}
+        )
 
-        x_filament = pd.Series({'layer_height': layer_height,
-                                'fill_density': fill_density,
-                                'infill_every_layers': infill_every_layers,
-                                })
+        x_filament = pd.Series(
+            {'layer_height': layer_height,
+             'fill_density': fill_density,
+             'infill_every_layers': infill_every_layers,
+             })
 
         _strength = strength_regressor_rf.predict(x_strength.values.reshape(1, -1))
         _filament = filament_regressor_rf.predict(x_filament.values.reshape(1, -1))

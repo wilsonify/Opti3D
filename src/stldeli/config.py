@@ -3,6 +3,9 @@ configuration script imported by other modules
 """
 
 import os
+from matplotlib import pyplot as plt
+
+plt.rcParams.update({'font.size': 22})
 
 LOG_DIR = 'logs'
 LOG_FILE = os.path.join(LOG_DIR, 'deli.log')
@@ -155,3 +158,22 @@ slic3r_configurations = {
     # "--retract-length-toolchange":[],
     # "--retract-restart-extra-toolchange":[]
 }
+
+important_features = [
+    'layer_height',
+    'infill_density',
+    'nozzle_temperature',
+    'wall_thickness'
+]
+strength_controllable_parameters = [
+    '--layer-height',  # layer_height
+    '--fill-density',  # infill_density
+    '--temperature',  # nozzle_temperature
+    '--solid-layers'  # wall_thickness
+]
+
+filament_controllable_parameters = [
+    '--infill-every-layers',
+    '--fill-density',
+    '--layer-height',
+]
