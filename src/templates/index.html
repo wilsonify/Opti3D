@@ -212,6 +212,11 @@
     let uploadedFile = null;
     let optimizationResult = null;
 
+    // Get CSRF token from meta tag
+    function getCsrfToken() {
+        return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    }
+
     // File upload handling
     const dropZone = document.getElementById('dropZone');
     const fileInput = document.getElementById('fileInput');
@@ -261,6 +266,9 @@
         try {
             const response = await fetch('/api/upload', {
                 method: 'POST',
+                headers: {
+                    'X-CSRF-Token': getCsrfToken()
+                },
                 body: formData
             });
 
@@ -323,7 +331,8 @@
             const response = await fetch('/api/optimize', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': getCsrfToken()
                 },
                 body: JSON.stringify({
                     file_id: uploadedFile.file_id,
