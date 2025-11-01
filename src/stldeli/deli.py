@@ -1,10 +1,11 @@
 import itertools as it
 import logging
+import math
 import os
 from logging.config import dictConfig
 from subprocess import CalledProcessError, check_output
+
 import pandas as pd
-import math
 
 from stldeli import config
 

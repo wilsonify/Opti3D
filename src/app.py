@@ -6,19 +6,20 @@ Flask web application for STL file optimization
 Provides frontend for uploading STL files and downloading optimized versions.
 """
 
-import os
-import tempfile
-import uuid
 import logging
+import os
 import secrets
+import tempfile
 import time
+import uuid
 from datetime import datetime
 from typing import Dict, Any, Optional, Union
+
 from flask import Flask, request, jsonify, render_template, send_file, session, Response
-from werkzeug.wrappers import Response as WerkzeugResponse
-from werkzeug.utils import secure_filename
-from werkzeug.middleware.proxy_fix import ProxyFix
 from stl import mesh
+from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.utils import secure_filename
+from werkzeug.wrappers import Response as WerkzeugResponse
 
 from stldeli.stl_optimizer import analyze_stl_mesh, optimize_stl_file
 

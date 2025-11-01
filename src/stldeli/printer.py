@@ -19,9 +19,9 @@ import pandas as pd
 import seaborn as sns
 from matplotlib import pyplot as plt
 from scipy import stats
-from scipy.optimize import differential_evolution
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error
+
 from stldeli import config
 
 
@@ -79,3 +79,4 @@ def main():
 
     # --- Load and enrich metadata ---
     metadata = pd.read_csv("metadata.csv")
+    print(f"metadata={metadata}")
