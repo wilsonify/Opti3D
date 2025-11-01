@@ -87,7 +87,7 @@ def main():
         )
         cmd.append(gcode_file_path)
         cmd.append(input_file)
-        metarow = metarow.append(pd.Series(count, index=["filenumber"]))
+        metarow = pd.concat([metarow, pd.Series(count, index=["filenumber"])])
         cmd_str = ''
         for arg in cmd:
             cmd_str += ' ' + str(arg)
@@ -96,7 +96,7 @@ def main():
             check_output(cmd)
             metarow = pd.concat([metarow,get_series_from_gcode(gcode_file_path)],axis=1)
             os.remove(gcode_file_path)
-            _metadata = _metadata.append(metarow, ignore_index=True)
+            _metadata = pd.concat([_metadata, metarow.to_frame().T], ignore_index=True)
             count += 1
         except CalledProcessError as error_message:
             print("unable to slice with error: {}".format(error_message))

@@ -5,10 +5,11 @@ STL file optimization utilities
 import numpy as np
 from stl import mesh
 import logging
+from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 
-def analyze_stl_mesh(mesh_data):
+def analyze_stl_mesh(mesh_data: mesh.Mesh) -> Optional[Dict[str, Any]]:
     """
     Analyze STL mesh and return detailed information
     """
@@ -48,11 +49,17 @@ def analyze_stl_mesh(mesh_data):
             'volume': float(volume),
             'surface_area': float(surface_area)
         }
+    except (ValueError, IndexError) as e:
+        logger.error(f"Data error analyzing STL mesh: {str(e)}")
+        return None
+    except AttributeError as e:
+        logger.error(f"Attribute error analyzing STL mesh: {str(e)}")
+        return None
     except Exception as e:
         logger.error(f"Error analyzing STL mesh: {str(e)}")
         return None
 
-def optimize_mesh_vertices(mesh_data, tolerance=0.01):
+def optimize_mesh_vertices(mesh_data: mesh.Mesh, tolerance: float = 0.01) -> mesh.Mesh:
     """
     Optimize mesh by removing duplicate vertices within tolerance
     """
@@ -72,11 +79,17 @@ def optimize_mesh_vertices(mesh_data, tolerance=0.01):
             optimized_mesh.vectors[i] = unique_vertices[tri]
         
         return optimized_mesh
+    except (ValueError, IndexError) as e:
+        logger.error(f"Data error optimizing mesh vertices: {str(e)}")
+        raise
+    except MemoryError as e:
+        logger.error(f"Memory error optimizing mesh vertices: {str(e)}")
+        raise
     except Exception as e:
         logger.error(f"Error optimizing mesh vertices: {str(e)}")
         raise
 
-def remove_degenerate_triangles(mesh_data):
+def remove_degenerate_triangles(mesh_data: mesh.Mesh) -> mesh.Mesh:
     """
     Remove degenerate triangles (zero area)
     """
@@ -103,11 +116,17 @@ def remove_degenerate_triangles(mesh_data):
             optimized_mesh.vectors[i] = mesh_data.vectors[idx]
         
         return optimized_mesh
+    except (ValueError, IndexError) as e:
+        logger.error(f"Data error removing degenerate triangles: {str(e)}")
+        raise
+    except MemoryError as e:
+        logger.error(f"Memory error removing degenerate triangles: {str(e)}")
+        raise
     except Exception as e:
         logger.error(f"Error removing degenerate triangles: {str(e)}")
         raise
 
-def smooth_mesh(mesh_data, iterations=1):
+def smooth_mesh(mesh_data: mesh.Mesh, iterations: int = 1) -> mesh.Mesh:
     """
     Apply simple Laplacian smoothing to mesh
     """
@@ -147,11 +166,17 @@ def smooth_mesh(mesh_data, iterations=1):
             current_mesh.vectors = smoothed_vertices.reshape(-1, 3, 3)
         
         return current_mesh
+    except (ValueError, IndexError) as e:
+        logger.error(f"Data error smoothing mesh: {str(e)}")
+        raise
+    except MemoryError as e:
+        logger.error(f"Memory error smoothing mesh: {str(e)}")
+        raise
     except Exception as e:
         logger.error(f"Error smoothing mesh: {str(e)}")
         raise
 
-def optimize_stl_file(file_path, optimization_level='medium'):
+def optimize_stl_file(file_path: str, optimization_level: str = 'medium') -> mesh.Mesh:
     """
     Optimize STL file with specified level
     Returns optimized mesh data
@@ -188,6 +213,12 @@ def optimize_stl_file(file_path, optimization_level='medium'):
         
         return optimized_mesh
         
+    except (ValueError, IndexError) as e:
+        logger.error(f"Data error optimizing STL file: {str(e)}")
+        raise
+    except MemoryError as e:
+        logger.error(f"Memory error optimizing STL file: {str(e)}")
+        raise
     except Exception as e:
         logger.error(f"Error optimizing STL file: {str(e)}")
         raise

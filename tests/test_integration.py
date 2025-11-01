@@ -77,7 +77,10 @@ class TestIntegrationWorkflow(unittest.TestCase):
             [[0, 1, 0], [1, 1, 1], [0, 1, 1]],
         ], dtype=np.float32)
         
-        cube_mesh = mesh.Mesh(cube_vertices)
+        # Create mesh properly using numpy-stl format
+        cube_mesh = mesh.Mesh(np.zeros(cube_vertices.shape[0], dtype=mesh.Mesh.dtype))
+        for i, verts in enumerate(cube_vertices):
+            cube_mesh.vectors[i] = verts
         cube_file = tempfile.NamedTemporaryFile(suffix='.stl', delete=False)
         cube_mesh.save(cube_file.name)
         cube_file.close()
@@ -98,7 +101,10 @@ class TestIntegrationWorkflow(unittest.TestCase):
             [[1, 1, 1], [1, 1, 1], [1, 1, 1]],
         ], dtype=np.float32)
         
-        complex_mesh = mesh.Mesh(complex_vertices)
+        # Create mesh properly using numpy-stl format
+        complex_mesh = mesh.Mesh(np.zeros(complex_vertices.shape[0], dtype=mesh.Mesh.dtype))
+        for i, verts in enumerate(complex_vertices):
+            complex_mesh.vectors[i] = verts
         complex_file = tempfile.NamedTemporaryFile(suffix='.stl', delete=False)
         complex_mesh.save(complex_file.name)
         complex_file.close()
@@ -106,15 +112,36 @@ class TestIntegrationWorkflow(unittest.TestCase):
 
     def test_complete_workflow_light_optimization(self):
         """Test complete workflow with light optimization"""
-        # Step 1: Access main page
+        # Step 1: Access main page and get CSRF token
         response = self.session.get(self.base_url)
         self.assertEqual(response.status_code, 200)
         self.assertIn('Opti3D', response.text)
+        
+        # Extract CSRF token from the page
+        csrf_token = None
+        import re
+        # Look for meta tag first
+        csrf_match = re.search(r'<meta[^>]*name=["\']csrf-token["\'][^>]*content=["\']([^"\']+)["\']', response.text)
+        if csrf_match:
+            csrf_token = csrf_match.group(1)
+        else:
+            # Fallback to other patterns
+            csrf_match = re.search(r'name="csrf_token"[^>]*value="([^"]+)"', response.text)
+            if csrf_match:
+                csrf_token = csrf_match.group(1)
+            else:
+                # Try to get from JavaScript
+                csrf_match = re.search(r'csrf_token["\']?\s*:\s*["\']([^"\']+)["\']', response.text)
+                if csrf_match:
+                    csrf_token = csrf_match.group(1)
+        
+        self.assertIsNotNone(csrf_token, "CSRF token not found in page")
 
-        # Step 2: Upload STL file
+        # Step 2: Upload STL file with CSRF token
         with open(self.test_files[0], 'rb') as test_file:
             files = {'file': ('test_cube.stl', test_file, 'application/octet-stream')}
-            upload_response = self.session.post(f"{self.base_url}/api/upload", files=files)
+            headers = {'X-CSRF-Token': csrf_token}
+            upload_response = self.session.post(f"{self.base_url}/api/upload", files=files, headers=headers)
         
         self.assertEqual(upload_response.status_code, 200)
         upload_data = upload_response.json()
@@ -133,7 +160,8 @@ class TestIntegrationWorkflow(unittest.TestCase):
         }
         optimize_response = self.session.post(
             f"{self.base_url}/api/optimize",
-            json=optimize_data
+            json=optimize_data,
+            headers={'X-CSRF-Token': csrf_token}
         )
         
         self.assertEqual(optimize_response.status_code, 200)
@@ -171,7 +199,8 @@ class TestIntegrationWorkflow(unittest.TestCase):
         # Step 5: Cleanup
         cleanup_response = self.session.post(
             f"{self.base_url}/api/cleanup",
-            json={'file_id': file_id}
+            json={'file_id': file_id},
+            headers={'X-CSRF-Token': csrf_token}
         )
         self.assertEqual(cleanup_response.status_code, 200)
 
@@ -289,7 +318,10 @@ class TestIntegrationWorkflow(unittest.TestCase):
             large_vertices.append(triangle)
         
         large_vertices = np.array(large_vertices)
-        large_mesh = mesh.Mesh(large_vertices)
+        # Create mesh properly using numpy-stl format
+        large_mesh = mesh.Mesh(np.zeros(large_vertices.shape[0], dtype=mesh.Mesh.dtype))
+        for i, verts in enumerate(large_vertices):
+            large_mesh.vectors[i] = verts
         
         large_file = tempfile.NamedTemporaryFile(suffix='.stl', delete=False)
         large_mesh.save(large_file.name)
@@ -425,7 +457,10 @@ class TestRealWorldScenarios(unittest.TestCase):
             [[0, 0, 5], [10, 10, 5], [10, 0, 5]],
         ], dtype=np.float32)
         
-        test_mesh = mesh.Mesh(vertices)
+        # Create mesh properly using numpy-stl format
+        test_mesh = mesh.Mesh(np.zeros(vertices.shape[0], dtype=mesh.Mesh.dtype))
+        for i, verts in enumerate(vertices):
+            test_mesh.vectors[i] = verts
         test_file = tempfile.NamedTemporaryFile(suffix='.stl', delete=False)
         test_mesh.save(test_file.name)
         test_file.close()
@@ -481,7 +516,10 @@ class TestRealWorldScenarios(unittest.TestCase):
         # Upload multiple files
         for i in range(5):
             vertices = np.random.rand(20, 3, 3).astype(np.float32) * 10
-            test_mesh = mesh.Mesh(vertices)
+            # Create mesh properly using numpy-stl format
+            test_mesh = mesh.Mesh(np.zeros(vertices.shape[0], dtype=mesh.Mesh.dtype))
+            for j, verts in enumerate(vertices):
+                test_mesh.vectors[j] = verts
             test_file = tempfile.NamedTemporaryFile(suffix='.stl', delete=False)
             test_mesh.save(test_file.name)
             test_file.close()
