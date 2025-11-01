@@ -2,5 +2,7 @@ numpy
 python-utils
 numpy-stl
 pandas
-sklearn
+scikit-learn
 matplotlib
+flask
+werkzeug

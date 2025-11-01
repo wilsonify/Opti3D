@@ -1,0 +1,389 @@
+{% extends "base.html" %}
+
+{% block title %}Opti3D - STL File Optimizer{% endblock %}
+
+{% block extra_css %}
+<style>
+    .drop-zone {
+        transition: all 0.3s ease;
+    }
+    .drop-zone.dragover {
+        background-color: rgb(219 234 254);
+        border-color: rgb(59 130 246);
+        transform: scale(1.02);
+    }
+    .progress-bar {
+        transition: width 0.3s ease;
+    }
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+    .animate-spin {
+        animation: spin 1s linear infinite;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+        <!-- Upload Section -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 class="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+                <i data-lucide="upload" class="w-5 h-5 mr-2"></i>
+                Upload STL File
+            </h2>
+            
+            <div id="dropZone" class="drop-zone border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-blue-400">
+                <i data-lucide="file-up" class="w-12 h-12 text-gray-400 mx-auto mb-4"></i>
+                <p class="text-gray-600 mb-2">Drag and drop your STL file here, or click to browse</p>
+                <p class="text-sm text-gray-500">Maximum file size: 100MB</p>
+                <input type="file" id="fileInput" accept=".stl" class="hidden">
+            </div>
+
+            <!-- File Info -->
+            <div id="fileInfo" class="hidden mt-6 p-4 bg-blue-50 rounded-lg">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        <i data-lucide="file-text" class="w-5 h-5 text-blue-600 mr-2"></i>
+                        <span id="fileName" class="font-medium text-gray-900"></span>
+                    </div>
+                    <button onclick="removeFile()" class="text-red-500 hover:text-red-700">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analysis Section -->
+        <div id="analysisSection" class="hidden bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 class="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+                <i data-lucide="bar-chart-3" class="w-5 h-5 mr-2"></i>
+                File Analysis
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="bg-gray-50 p-4 rounded-lg">
+                    <p class="text-sm text-gray-500 mb-1">Triangles</p>
+                    <p id="triangleCount" class="text-2xl font-bold text-gray-900">-</p>
+                </div>
+                <div class="bg-gray-50 p-4 rounded-lg">
+                    <p class="text-sm text-gray-500 mb-1">Vertices</p>
+                    <p id="vertexCount" class="text-2xl font-bold text-gray-900">-</p>
+                </div>
+                <div class="bg-gray-50 p-4 rounded-lg">
+                    <p class="text-sm text-gray-500 mb-1">File Size</p>
+                    <p id="fileSize" class="text-2xl font-bold text-gray-900">-</p>
+                </div>
+            </div>
+            
+            <div class="mt-4">
+                <p class="text-sm text-gray-500 mb-2">Dimensions (mm)</p>
+                <div class="grid grid-cols-3 gap-4">
+                    <div class="text-center">
+                        <span class="text-xs text-gray-500">X</span>
+                        <p id="dimX" class="font-semibold">-</p>
+                    </div>
+                    <div class="text-center">
+                        <span class="text-xs text-gray-500">Y</span>
+                        <p id="dimY" class="font-semibold">-</p>
+                    </div>
+                    <div class="text-center">
+                        <span class="text-xs text-gray-500">Z</span>
+                        <p id="dimZ" class="font-semibold">-</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Optimization Section -->
+        <div id="optimizationSection" class="hidden bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 class="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+                <i data-lucide="settings" class="w-5 h-5 mr-2"></i>
+                Optimization Settings
+            </h2>
+            
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Optimization Level</label>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <label class="relative">
+                        <input type="radio" name="optimizationLevel" value="light" class="peer sr-only" checked>
+                        <div class="p-4 border-2 rounded-lg cursor-pointer peer-checked:border-blue-500 peer-checked:bg-blue-50 hover:bg-gray-50">
+                            <div class="flex items-center mb-2">
+                                <i data-lucide="zap" class="w-5 h-5 text-green-600 mr-2"></i>
+                                <span class="font-medium">Light</span>
+                            </div>
+                            <p class="text-sm text-gray-600">Minimal optimization, preserves maximum quality</p>
+                        </div>
+                    </label>
+                    
+                    <label class="relative">
+                        <input type="radio" name="optimizationLevel" value="medium" class="peer sr-only">
+                        <div class="p-4 border-2 rounded-lg cursor-pointer peer-checked:border-blue-500 peer-checked:bg-blue-50 hover:bg-gray-50">
+                            <div class="flex items-center mb-2">
+                                <i data-lucide="settings-2" class="w-5 h-5 text-blue-600 mr-2"></i>
+                                <span class="font-medium">Medium</span>
+                            </div>
+                            <p class="text-sm text-gray-600">Balanced optimization and quality</p>
+                        </div>
+                    </label>
+                    
+                    <label class="relative">
+                        <input type="radio" name="optimizationLevel" value="aggressive" class="peer sr-only">
+                        <div class="p-4 border-2 rounded-lg cursor-pointer peer-checked:border-blue-500 peer-checked:bg-blue-50 hover:bg-gray-50">
+                            <div class="flex items-center mb-2">
+                                <i data-lucide="flame" class="w-5 h-5 text-orange-600 mr-2"></i>
+                                <span class="font-medium">Aggressive</span>
+                            </div>
+                            <p class="text-sm text-gray-600">Maximum file reduction, may affect quality</p>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <button id="optimizeBtn" onclick="optimizeFile()" class="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center">
+                <i data-lucide="play" class="w-5 h-5 mr-2"></i>
+                Optimize File
+            </button>
+        </div>
+
+        <!-- Progress Section -->
+        <div id="progressSection" class="hidden bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 class="text-xl font-semibold text-gray-900 mb-4">Processing...</h2>
+            <div class="w-full bg-gray-200 rounded-full h-2">
+                <div id="progressBar" class="progress-bar bg-blue-600 h-2 rounded-full" style="width: 0%"></div>
+            </div>
+            <p id="progressText" class="text-sm text-gray-600 mt-2">Analyzing file...</p>
+        </div>
+
+        <!-- Results Section -->
+        <div id="resultsSection" class="hidden bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+                <i data-lucide="check-circle" class="w-5 h-5 mr-2 text-green-600"></i>
+                Optimization Complete
+            </h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <h3 class="font-medium text-gray-900 mb-3">File Comparison</h3>
+                    <div class="space-y-2">
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Original Size:</span>
+                            <span id="originalSize" class="font-medium">-</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Optimized Size:</span>
+                            <span id="optimizedSize" class="font-medium">-</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Compression:</span>
+                            <span id="compressionRatio" class="font-medium text-green-600">-</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div>
+                    <h3 class="font-medium text-gray-900 mb-3">Optimized File Stats</h3>
+                    <div class="space-y-2">
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Triangles:</span>
+                            <span id="optimizedTriangles" class="font-medium">-</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Vertices:</span>
+                            <span id="optimizedVertices" class="font-medium">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-6 flex space-x-4">
+                <button id="downloadBtn" onclick="downloadFile()" class="flex-1 bg-green-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-green-700 transition-colors flex items-center justify-center">
+                    <i data-lucide="download" class="w-5 h-5 mr-2"></i>
+                    Download Optimized File
+                </button>
+                <button onclick="resetAll()" class="flex-1 bg-gray-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-gray-700 transition-colors flex items-center justify-center">
+                    <i data-lucide="refresh-cw" class="w-5 h-5 mr-2"></i>
+                    Optimize Another File
+                </button>
+            </div>
+        </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let uploadedFile = null;
+    let optimizationResult = null;
+
+    // File upload handling
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+
+    dropZone.addEventListener('click', () => fileInput.click());
+    
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('dragover');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.classList.remove('dragover');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            handleFileUpload(files[0]);
+        }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+            handleFileUpload(e.target.files[0]);
+        }
+    });
+
+    async function handleFileUpload(file) {
+        if (!file.name.toLowerCase().endsWith('.stl')) {
+            showNotification('Please upload an STL file', 'error');
+            return;
+        }
+
+        if (file.size > 100 * 1024 * 1024) {
+            showNotification('File size must be less than 100MB', 'error');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        showProgress('Uploading file...', 20);
+
+        try {
+            const response = await fetch('/api/upload', {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Upload failed');
+            }
+
+            uploadedFile = result;
+            displayFileInfo(result);
+            displayAnalysis(result.analysis);
+            showOptimizationSection();
+            hideProgress();
+
+        } catch (error) {
+            showNotification(error.message, 'error');
+            hideProgress();
+        }
+    }
+
+    function displayFileInfo(fileData) {
+        document.getElementById('fileName').textContent = fileData.filename;
+        document.getElementById('fileInfo').classList.remove('hidden');
+    }
+
+    function displayAnalysis(analysis) {
+        document.getElementById('triangleCount').textContent = analysis.triangles.toLocaleString();
+        document.getElementById('vertexCount').textContent = analysis.vertices.toLocaleString();
+        document.getElementById('dimX').textContent = analysis.dimensions.x.toFixed(2) + ' mm';
+        document.getElementById('dimY').textContent = analysis.dimensions.y.toFixed(2) + ' mm';
+        document.getElementById('dimZ').textContent = analysis.dimensions.z.toFixed(2) + ' mm';
+        document.getElementById('analysisSection').classList.remove('hidden');
+    }
+
+    function showOptimizationSection() {
+        document.getElementById('optimizationSection').classList.remove('hidden');
+    }
+
+    function removeFile() {
+        uploadedFile = null;
+        document.getElementById('fileInfo').classList.add('hidden');
+        document.getElementById('analysisSection').classList.add('hidden');
+        document.getElementById('optimizationSection').classList.add('hidden');
+        document.getElementById('resultsSection').classList.add('hidden');
+        fileInput.value = '';
+    }
+
+    async function optimizeFile() {
+        if (!uploadedFile) {
+            showNotification('Please upload a file first', 'error');
+            return;
+        }
+
+        const optimizationLevel = document.querySelector('input[name="optimizationLevel"]:checked').value;
+        
+        showProgress('Optimizing file...', 50);
+
+        try {
+            const response = await fetch('/api/optimize', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    file_id: uploadedFile.file_id,
+                    level: optimizationLevel
+                })
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Optimization failed');
+            }
+
+            optimizationResult = result;
+            displayResults(result);
+            hideProgress();
+
+        } catch (error) {
+            showNotification(error.message, 'error');
+            hideProgress();
+        }
+    }
+
+    function displayResults(result) {
+        document.getElementById('originalSize').textContent = formatFileSize(result.original_size);
+        document.getElementById('optimizedSize').textContent = formatFileSize(result.optimized_size);
+        document.getElementById('compressionRatio').textContent = result.compression_ratio + '%';
+        
+        if (result.optimized_analysis) {
+            document.getElementById('optimizedTriangles').textContent = result.optimized_analysis.triangles.toLocaleString();
+            document.getElementById('optimizedVertices').textContent = result.optimized_analysis.vertices.toLocaleString();
+        }
+
+        document.getElementById('resultsSection').classList.remove('hidden');
+    }
+
+    function downloadFile() {
+        if (!optimizationResult) {
+            showNotification('No optimized file available', 'error');
+            return;
+        }
+
+        window.location.href = `/api/download/${optimizationResult.download_id}`;
+    }
+
+    function resetAll() {
+        uploadedFile = null;
+        optimizationResult = null;
+        removeFile();
+        document.getElementById('resultsSection').classList.add('hidden');
+    }
+
+    function showProgress(text, progress) {
+        document.getElementById('progressSection').classList.remove('hidden');
+        document.getElementById('progressText').textContent = text;
+        document.getElementById('progressBar').style.width = progress + '%';
+    }
+
+    function hideProgress() {
+        document.getElementById('progressSection').classList.add('hidden');
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Opti3D - STL File Optimizer{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    {% block extra_css %}{% endblock %}
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center">
+                    <i data-lucide="box" class="w-8 h-8 text-blue-600 mr-3"></i>
+                    <h1 class="text-2xl font-bold text-gray-900">Opti3D</h1>
+                    <span class="ml-2 text-sm text-gray-500">{% block subtitle %}STL File Optimizer{% endblock %}</span>
+                </div>
+                <div class="flex items-center space-x-4">
+                    {% block header_actions %}{% endblock %}
+                    <button onclick="showHelp()" class="text-gray-500 hover:text-gray-700">
+                        <i data-lucide="help-circle" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Help Modal -->
+    <div id="helpModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 max-w-md mx-4">
+            <h3 class="text-lg font-semibold mb-4">How to Use Opti3D</h3>
+            <ol class="list-decimal list-inside space-y-2 text-sm text-gray-600">
+                <li>Upload your STL file by dragging and dropping or clicking the upload area</li>
+                <li>View the file analysis showing triangles, vertices, and dimensions</li>
+                <li>Choose an optimization level (Light, Medium, or Aggressive)</li>
+                <li>Click "Optimize File" to process your STL</li>
+                <li>Download your optimized file for 3D printing</li>
+            </ol>
+            <button onclick="closeHelp()" class="mt-4 w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700">
+                Got it!
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        function showHelp() {
+            document.getElementById('helpModal').classList.remove('hidden');
+        }
+
+        function closeHelp() {
+            document.getElementById('helpModal').classList.add('hidden');
+        }
+
+        function showNotification(message, type) {
+            // Simple notification - you could enhance this with a toast library
+            alert(message);
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Re-initialize icons when DOM changes
+        const observer = new MutationObserver(() => {
+            lucide.createIcons();
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+    </script>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
