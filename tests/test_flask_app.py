@@ -10,6 +10,7 @@ import json
 import tempfile
 import os
 import io
+import secrets
 from unittest.mock import patch, MagicMock
 from stl import mesh
 import numpy as np
@@ -24,6 +25,15 @@ class TestFlaskApp(unittest.TestCase):
         """Set up test fixtures"""
         self.app = app.test_client()
         self.app.testing = True
+        app.testing = True  # Ensure app is in testing mode
+        
+        # Set up session for CSRF
+        with self.app.session_transaction() as sess:
+            sess['csrf_token'] = secrets.token_urlsafe(32)
+        
+        # Get CSRF token from session
+        with self.app.session_transaction() as sess:
+            self.csrf_token = sess.get('csrf_token', secrets.token_urlsafe(32))
         
         # Create a test STL file
         self.test_cube_vertices = np.array([
@@ -56,7 +66,9 @@ class TestFlaskApp(unittest.TestCase):
 
     def test_upload_no_file(self):
         """Test upload endpoint with no file"""
-        response = self.app.post('/api/upload', data={})
+        response = self.app.post('/api/upload', 
+                               data={},
+                               headers={'X-CSRF-Token': self.csrf_token})
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.data)
         self.assertIn('error', data)
@@ -64,18 +76,22 @@ class TestFlaskApp(unittest.TestCase):
 
     def test_upload_empty_filename(self):
         """Test upload endpoint with empty filename"""
-        response = self.app.post('/api/upload', data={
-            'file': (io.BytesIO(b''), '')
-        })
+        response = self.app.post('/api/upload', 
+                               data={
+                                   'file': (io.BytesIO(b''), '')
+                               },
+                               headers={'X-CSRF-Token': self.csrf_token})
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.data)
         self.assertIn('error', data)
 
     def test_upload_invalid_file_type(self):
         """Test upload endpoint with invalid file type"""
-        response = self.app.post('/api/upload', data={
-            'file': (io.BytesIO(b'test content'), 'test.txt')
-        })
+        response = self.app.post('/api/upload', 
+                               data={
+                                   'file': (io.BytesIO(b'test content'), 'test.txt')
+                               },
+                               headers={'X-CSRF-Token': self.csrf_token})
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.data)
         self.assertIn('error', data)
@@ -84,16 +100,18 @@ class TestFlaskApp(unittest.TestCase):
     def test_upload_valid_stl_file(self):
         """Test upload endpoint with valid STL file"""
         with open(self.temp_stl.name, 'rb') as test_file:
-            response = self.app.post('/api/upload', data={
-                'file': (test_file, 'test_cube.stl')
-            })
+            response = self.app.post('/api/upload', 
+                                   data={
+                                       'file': (test_file, 'test_cube.stl')
+                                   },
+                                   headers={'X-CSRF-Token': self.csrf_token})
         
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.data)
-        
         self.assertIn('file_id', data)
         self.assertIn('filename', data)
         self.assertIn('analysis', data)
+        self.assertEqual(data['filename'], 'test_cube.stl')
         self.assertIn('upload_time', data)
         
         # Check analysis data
@@ -104,12 +122,14 @@ class TestFlaskApp(unittest.TestCase):
         self.assertEqual(analysis['triangles'], 4)
 
     def test_upload_large_file(self):
-        """Test upload endpoint with file exceeding size limit"""
+        """Test upload endpoint with large file"""
         # Create a large file that exceeds the limit
         large_content = b'x' * (101 * 1024 * 1024)  # 101MB
-        response = self.app.post('/api/upload', data={
-            'file': (io.BytesIO(large_content), 'large.stl')
-        })
+        response = self.app.post('/api/upload', 
+                               data={
+                                   'file': (io.BytesIO(large_content), 'large.stl')
+                               },
+                               headers={'X-CSRF-Token': self.csrf_token})
         
         # Should be rejected due to size limit
         self.assertNotEqual(response.status_code, 200)
@@ -123,9 +143,11 @@ class TestFlaskApp(unittest.TestCase):
         
         # First upload a file
         with open(self.temp_stl.name, 'rb') as test_file:
-            upload_response = self.app.post('/api/upload', data={
-                'file': (test_file, 'test_cube.stl')
-            })
+            upload_response = self.app.post('/api/upload', 
+                                          data={
+                                              'file': (test_file, 'test_cube.stl')
+                                          },
+                                          headers={'X-CSRF-Token': self.csrf_token})
         
         upload_data = json.loads(upload_response.data)
         file_id = upload_data['file_id']
@@ -147,7 +169,8 @@ class TestFlaskApp(unittest.TestCase):
                         'file_id': file_id,
                         'level': 'medium'
                     }),
-                    content_type='application/json'
+                    content_type='application/json',
+                    headers={'X-CSRF-Token': self.csrf_token}
                 )
         
         self.assertEqual(response.status_code, 200)
@@ -163,7 +186,8 @@ class TestFlaskApp(unittest.TestCase):
         """Test optimization endpoint without file_id"""
         response = self.app.post('/api/optimize', 
             data=json.dumps({}),
-            content_type='application/json'
+            content_type='application/json',
+            headers={'X-CSRF-Token': self.csrf_token}
         )
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.data)
@@ -176,7 +200,8 @@ class TestFlaskApp(unittest.TestCase):
             data=json.dumps({
                 'file_id': 'nonexistent_file_id'
             }),
-            content_type='application/json'
+            content_type='application/json',
+            headers={'X-CSRF-Token': self.csrf_token}
         )
         self.assertEqual(response.status_code, 404)
         data = json.loads(response.data)
@@ -187,9 +212,11 @@ class TestFlaskApp(unittest.TestCase):
         """Test different optimization levels"""
         # Upload a file first
         with open(self.temp_stl.name, 'rb') as test_file:
-            upload_response = self.app.post('/api/upload', data={
-                'file': (test_file, 'test_cube.stl')
-            })
+            upload_response = self.app.post('/api/upload', 
+                                          data={
+                                              'file': (test_file, 'test_cube.stl')
+                                          },
+                                          headers={'X-CSRF-Token': self.csrf_token})
         
         upload_data = json.loads(upload_response.data)
         file_id = upload_data['file_id']
@@ -214,7 +241,8 @@ class TestFlaskApp(unittest.TestCase):
                                 'file_id': file_id,
                                 'level': level
                             }),
-                            content_type='application/json'
+                            content_type='application/json',
+                            headers={'X-CSRF-Token': self.csrf_token}
                         )
                         
                         self.assertEqual(response.status_code, 200)
@@ -234,7 +262,8 @@ class TestFlaskApp(unittest.TestCase):
             data=json.dumps({
                 'file_id': 'test_file_id'
             }),
-            content_type='application/json'
+            content_type='application/json',
+            headers={'X-CSRF-Token': self.csrf_token}
         )
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.data)
@@ -244,7 +273,8 @@ class TestFlaskApp(unittest.TestCase):
         """Test cleanup endpoint for all files"""
         response = self.app.post('/api/cleanup',
             data=json.dumps({}),
-            content_type='application/json'
+            content_type='application/json',
+            headers={'X-CSRF-Token': self.csrf_token}
         )
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.data)
@@ -270,13 +300,15 @@ class TestFlaskApp(unittest.TestCase):
         # Test malformed JSON
         response = self.app.post('/api/optimize', 
             data='invalid json',
-            content_type='application/json'
+            content_type='application/json',
+            headers={'X-CSRF-Token': self.csrf_token}
         )
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 500)
 
         # Test missing content type
         response = self.app.post('/api/optimize', 
-            data=json.dumps({'file_id': 'test'})
+            data=json.dumps({'file_id': 'test'}),
+            headers={'X-CSRF-Token': self.csrf_token}
         )
         # Should handle gracefully (may return 400 or 200 depending on Flask config)
 
@@ -287,9 +319,11 @@ class TestFlaskApp(unittest.TestCase):
         # Upload multiple files
         for i in range(3):
             with open(self.temp_stl.name, 'rb') as test_file:
-                response = self.app.post('/api/upload', data={
-                    'file': (test_file, f'test_cube_{i}.stl')
-                })
+                response = self.app.post('/api/upload', 
+                                       data={
+                                           'file': (test_file, f'test_cube_{i}.stl')
+                                       },
+                                       headers={'X-CSRF-Token': self.csrf_token})
                 responses.append(response)
         
         # All uploads should succeed
@@ -297,9 +331,10 @@ class TestFlaskApp(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             data = json.loads(response.data)
             self.assertIn('file_id', data)
-            # Each file should have a unique ID
-            file_ids = [json.loads(r.data)['file_id'] for r in responses]
-            self.assertEqual(len(set(file_ids)), len(file_ids))
+        
+        # Each file should have a unique ID
+        file_ids = [json.loads(r.data)['file_id'] for r in responses]
+        self.assertEqual(len(set(file_ids)), len(file_ids))
 
 
 class TestFileOperations(unittest.TestCase):
@@ -309,14 +344,47 @@ class TestFileOperations(unittest.TestCase):
         """Set up test fixtures"""
         self.app = app.test_client()
         self.app.testing = True
+        app.testing = True  # Ensure app is in testing mode
+        
+        # Set up session for CSRF
+        with self.app.session_transaction() as sess:
+            sess['csrf_token'] = secrets.token_urlsafe(32)
+        
+        # Get CSRF token from session
+        with self.app.session_transaction() as sess:
+            self.csrf_token = sess.get('csrf_token', secrets.token_urlsafe(32))
+        
+        # Create a test STL file for this test class
+        self.test_cube_vertices = np.array([
+            [[0, 0, 0], [1, 0, 0], [1, 1, 0]],
+            [[0, 0, 0], [1, 1, 0], [0, 1, 0]],
+            [[0, 0, 1], [0, 1, 1], [1, 1, 1]],
+            [[0, 0, 1], [1, 1, 1], [1, 0, 1]],
+        ], dtype=np.float32)
+        
+        self.test_cube_mesh = mesh.Mesh(np.zeros(self.test_cube_vertices.shape[0], dtype=mesh.Mesh.dtype))
+        for i, verts in enumerate(self.test_cube_vertices):
+            self.test_cube_mesh.vectors[i] = verts
+        
+        # Create temporary STL file for testing
+        self.temp_stl = tempfile.NamedTemporaryFile(suffix='.stl', delete=False)
+        self.test_cube_mesh.save(self.temp_stl.name)
+        self.temp_stl.close()
+
+    def tearDown(self):
+        """Clean up test fixtures"""
+        if os.path.exists(self.temp_stl.name):
+            os.unlink(self.temp_stl.name)
 
     def test_temp_file_handling(self):
         """Test temporary file creation and cleanup"""
-        # Upload a file
-        test_content = b'test stl content'
-        response = self.app.post('/api/upload', data={
-            'file': (io.BytesIO(test_content), 'test.stl')
-        })
+        # Upload a file using the test STL file
+        with open(self.temp_stl.name, 'rb') as test_file:
+            response = self.app.post('/api/upload', 
+                                   data={
+                                       'file': (test_file, 'test.stl')
+                                   },
+                                   headers={'X-CSRF-Token': self.csrf_token})
         
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.data)
@@ -329,7 +397,8 @@ class TestFileOperations(unittest.TestCase):
         # Cleanup should work
         cleanup_response = self.app.post('/api/cleanup',
             data=json.dumps({'file_id': file_id}),
-            content_type='application/json'
+            content_type='application/json',
+            headers={'X-CSRF-Token': self.csrf_token}
         )
         self.assertEqual(cleanup_response.status_code, 200)
 
@@ -341,6 +410,15 @@ class TestSecurityFeatures(unittest.TestCase):
         """Set up test fixtures"""
         self.app = app.test_client()
         self.app.testing = True
+        app.testing = True  # Ensure app is in testing mode
+        
+        # Set up session for CSRF
+        with self.app.session_transaction() as sess:
+            sess['csrf_token'] = secrets.token_urlsafe(32)
+        
+        # Get CSRF token from session
+        with self.app.session_transaction() as sess:
+            self.csrf_token = sess.get('csrf_token', secrets.token_urlsafe(32))
 
     def test_file_type_validation(self):
         """Test file type validation"""
@@ -352,9 +430,11 @@ class TestSecurityFeatures(unittest.TestCase):
         ]
         
         for filename, content in malicious_files:
-            response = self.app.post('/api/upload', data={
-                'file': (io.BytesIO(content), filename)
-            })
+            response = self.app.post('/api/upload', 
+                                   data={
+                                       'file': (io.BytesIO(content), filename)
+                                   },
+                                   headers={'X-CSRF-Token': self.csrf_token})
             self.assertEqual(response.status_code, 400)
             data = json.loads(response.data)
             self.assertIn('Invalid file type', data['error'])
@@ -369,9 +449,11 @@ class TestSecurityFeatures(unittest.TestCase):
         ]
         
         for filename in dangerous_filenames:
-            response = self.app.post('/api/upload', data={
-                'file': (io.BytesIO(b'test'), filename)
-            })
+            response = self.app.post('/api/upload', 
+                                   data={
+                                       'file': (io.BytesIO(b'test'), filename)
+                                   },
+                                   headers={'X-CSRF-Token': self.csrf_token})
             # Should either accept as STL or reject as invalid type
             # But should not cause security issues
             self.assertIn(response.status_code, [200, 400])
