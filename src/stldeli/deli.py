@@ -5,7 +5,6 @@
 this script automates the process of slicing the same stl file with many possible combinations of command line arguments
 that can be passed to slic3r
 """
-import glob
 import itertools as it
 import logging
 import os
@@ -39,6 +38,12 @@ def get_combinations_from_configurations(configurations):
 
 
 def get_series_from_gcode(gcode_file_path):
+    """
+    Extract metadata from G-code file as pandas Series.
+    
+    :param gcode_file_path: Path to the G-code file
+    :return: pandas Series containing extracted metadata
+    """
     metarow = pd.Series()
     with open(gcode_file_path) as gcode_file:
         for line in gcode_file.readlines():
@@ -58,20 +63,20 @@ def main():
     logging.info("main")
     combinations = get_combinations_from_configurations(config.slic3r_configurations)
     total = len(list(combinations))
-    logging.info("{} possible slices".format(total))
+    logging.info(f"{total} possible slices")
 
     count = 0
     _metadata = pd.DataFrame()
     input_file = os.path.abspath("stl_files/largecube.stl")
     for configuration in list(it.product(*config.slic3r_configurations.values())):
-        logging.debug("configuration  = {}".format(configuration))
+        logging.debug(f"configuration  = {configuration}")
         metarow = pd.Series(configuration, index=config.slic3r_configurations.keys())
         output_file_format = "[input_filename_base]"
-        print("{} out of {}".format(count + 1, total))
+        print(f"{count + 1} out of {total}")
         cmd = ["slic3r"]
 
         for key, value in zip(config.slic3r_configurations.keys(), configuration):
-            logging.debug("adding {} with value of {} to cmd".format(key, value))
+            logging.debug(f"adding {key} with value of {value} to cmd")
             metarow[key] = value
             if value:
                 cmd.append(str(key))
@@ -80,11 +85,7 @@ def main():
             output_file_format += "_" + flag2placeholder(key)
 
         cmd.append("--output-filename-format")
-        gcode_file_path = "{count}_{output_file_format}_.gcode" \
-            .format(
-            count=count,
-            output_file_format=output_file_format
-        )
+        gcode_file_path = f"{count}_{output_file_format}_.gcode"
         cmd.append(gcode_file_path)
         cmd.append(input_file)
         metarow = pd.concat([metarow, pd.Series(count, index=["filenumber"])])
@@ -99,7 +100,7 @@ def main():
             _metadata = pd.concat([_metadata, metarow.to_frame().T], ignore_index=True)
             count += 1
         except CalledProcessError as error_message:
-            print("unable to slice with error: {}".format(error_message))
+            print(f"unable to slice with error: {error_message}")
             continue
 
     return _metadata

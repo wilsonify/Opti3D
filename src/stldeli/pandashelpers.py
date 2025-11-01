@@ -1,21 +1,30 @@
 # coding: utf-8
 
-# In[1]:
+"""
+Helper functions for pandas data processing and analysis.
+Provides utility functions for data cleaning, transformation, and analysis.
+"""
 
 
 import re
 import glob
+from fractions import Fraction
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LinearRegression
 from matplotlib import pyplot as plt
-from fractions import Fraction
 
 
 # In[2]:
 
 
 def clean_column_names(self):
+    """
+    Clean DataFrame column names by removing non-alphanumeric characters.
+    
+    :param self: pandas DataFrame
+    :return: DataFrame with cleaned column names
+    """
     new_column_names = {old: re.sub(string=old.lower(),
                                     pattern=r'\W',  # \W matches non-alphnumeric
                                     repl='_').strip('_')
@@ -31,6 +40,12 @@ pd.DataFrame.clean_column_names = clean_column_names
 
 
 def parse_date_columns(self):
+    """
+    Parse columns containing 'date' in their name as datetime.
+    
+    :param self: pandas DataFrame
+    :return: DataFrame with date columns parsed
+    """
     for date_column in self.filter(regex="date").columns:
         self[date_column] = pd.to_datetime(self[date_column])
     return self
@@ -43,6 +58,13 @@ pd.DataFrame.parse_date_columns = parse_date_columns
 
 
 def zero_to_null(self, subset):
+    """
+    Convert zero values to NaN in specified columns.
+    
+    :param self: pandas DataFrame
+    :param subset: List of columns to convert zeros to NaN
+    :return: DataFrame with zeros converted to NaN
+    """
     for column in subset:
         self[column] = self[column].apply(lambda x: x if x != 0 else np.nan)
     return self
@@ -55,6 +77,14 @@ pd.DataFrame.zero_to_null = zero_to_null
 
 
 def merge_multi(self, df, **kwargs):
+    """
+    Merge DataFrames with multi-index support.
+    
+    :param self: pandas DataFrame
+    :param df: DataFrame to merge with
+    :param kwargs: Additional arguments for pandas merge
+    :return: Merged DataFrame
+    """
     try:
         left = self.reset_index()
     except ValueError:
@@ -76,7 +106,17 @@ pd.DataFrame.merge_multi = merge_multi
 # In[6]:
 
 
-def deduplicate(self, key, numeric_agg='max', non_numeric_agg='first', override=dict()):
+def deduplicate(self, key, numeric_agg='max', non_numeric_agg='first', override={}):
+    """
+    Deduplicate DataFrame based on a key with custom aggregation.
+    
+    :param self: pandas DataFrame
+    :param key: Column name to group by for deduplication
+    :param numeric_agg: Aggregation function for numeric columns
+    :param non_numeric_agg: Aggregation function for non-numeric columns
+    :param override: Dictionary to override aggregation functions
+    :return: Deduplicated DataFrame
+    """
     how_to_agg = {index: numeric_agg if np.issubdtype(value, np.number) else non_numeric_agg
                   for (index, value) in self.dtypes.iteritems()
                   }
@@ -91,6 +131,12 @@ pd.DataFrame.deduplicate = deduplicate
 
 
 def parse_api_columns(self):
+    """
+    Parse API columns by removing non-alphanumeric characters and padding.
+    
+    :param self: pandas DataFrame
+    :return: DataFrame with API columns parsed
+    """
     for api_column in self.filter(regex="api").columns:
         self[api_column] = self[api_column].apply(str).str.replace(r'\W', '').str.pad(14
                                                                                       , side='right'
@@ -197,6 +243,12 @@ if __name__ == '__main__':
     # In[18]:
 
     def string_to_fraction(x):
+        """
+        Convert string to float using Fraction for better precision.
+        
+        :param x: Input value to convert
+        :return: Float representation of the input
+        """
         try:
             result = float(Fraction(x))
         except AttributeError:
@@ -286,7 +338,7 @@ if __name__ == '__main__':
     # In[33]:
 
     production['yearmonth'] = production['date'].apply(
-        lambda x: '{YEAR}-{MONTH:02d}'.format(YEAR=x.year, MONTH=x.month))
+        lambda x: f'{x.year}-{x.month:02d}')
 
     # In[34]:
 

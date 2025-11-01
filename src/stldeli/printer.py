@@ -14,7 +14,6 @@ from matplotlib import pyplot as plt
 from scipy import stats
 from scipy.optimize import differential_evolution
 from sklearn.ensemble import RandomForestRegressor  # pylint: disable=ungrouped-imports
-from sklearn.linear_model import LinearRegression  # pylint: disable=ungrouped-imports
 from stldeli import config
 
 

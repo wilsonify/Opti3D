@@ -9,17 +9,16 @@ Provides frontend for uploading STL files and downloading optimized versions
 import os
 import tempfile
 import uuid
+import logging
+import secrets
+import time
 from datetime import datetime
 from typing import Dict, Any, Optional, Union
 from flask import Flask, request, jsonify, render_template, send_file, session, Response
 from werkzeug.wrappers import Response as WerkzeugResponse
 from werkzeug.utils import secure_filename
 from werkzeug.middleware.proxy_fix import ProxyFix
-import numpy as np
 from stl import mesh
-import logging
-import secrets
-import time
 
 from stldeli.stl_optimizer import analyze_stl_mesh, optimize_stl_file
 
@@ -49,14 +48,14 @@ upload_folder = app.config['UPLOAD_FOLDER']
 if not os.path.exists(upload_folder):
     try:
         os.makedirs(upload_folder, exist_ok=True)
-        logger.info(f"Created upload directory: {upload_folder}")
+        logger.info("Created upload directory: %s", upload_folder)
     except (PermissionError, OSError) as e:
-        logger.error(f"Cannot create upload directory {upload_folder}: {str(e)}")
+        logger.error("Cannot create upload directory %s: %s", upload_folder, str(e))
         raise
 
 if not os.access(upload_folder, os.W_OK):
-    logger.error(f"Upload directory {upload_folder} is not writable")
-    raise PermissionError(f"Upload directory {upload_folder} is not writable")
+    logger.error("Upload directory %s is not writable", upload_folder)
+    raise PermissionError("Upload directory %s is not writable", upload_folder)
 
 # Simple rate limiting using in-memory store
 rate_limit_store = {}
@@ -66,19 +65,19 @@ def check_rate_limit(client_ip: str, limit: int = 5, window: int = 60) -> bool:
     # Disable rate limiting during testing
     if app.testing:
         return True
-        
+
     now = time.time()
     if client_ip not in rate_limit_store:
         rate_limit_store[client_ip] = []
-    
+
     # Remove old requests outside the window
-    rate_limit_store[client_ip] = [req_time for req_time in rate_limit_store[client_ip] 
+    rate_limit_store[client_ip] = [req_time for req_time in rate_limit_store[client_ip]
                                    if now - req_time < window]
-    
+
     # Check if under limit
     if len(rate_limit_store[client_ip]) >= limit:
         return False
-    
+
     # Add current request
     rate_limit_store[client_ip].append(now)
     return True
@@ -100,18 +99,18 @@ def add_security_headers(response: Response) -> Response:
     response.headers['X-Frame-Options'] = 'DENY'
     response.headers['X-XSS-Protection'] = '1; mode=block'
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
-    
+
     # Only add HSTS in production with HTTPS
     if os.environ.get('FLASK_ENV') == 'production' and request.is_secure:
         response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains; preload'
-    
+
     # More restrictive CSP for production
     if os.environ.get('FLASK_ENV') == 'production':
         csp = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; form-action 'self';"
     else:
         # More permissive CSP for development
         csp = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self';"
-    
+
     response.headers['Content-Security-Policy'] = csp
     return response
 
@@ -128,16 +127,16 @@ def analyze_stl_file(file_path: str) -> Optional[Dict[str, Any]]:
         analysis = analyze_stl_mesh(mesh_data)
         return analysis
     except PermissionError as e:
-        logger.error(f"Permission error analyzing STL file: {str(e)}")
+        logger.error("Permission error analyzing STL file: %s", str(e))
         return None
     except OSError as e:
-        logger.error(f"File system error analyzing STL file: {str(e)}")
+        logger.error("File system error analyzing STL file: %s", str(e))
         return None
     except ValueError as e:
-        logger.error(f"Invalid file format analyzing STL file: {str(e)}")
+        logger.error("Invalid file format analyzing STL file: %s", str(e))
         return None
-    except Exception as e:
-        logger.error(f"Unexpected error analyzing STL file: {str(e)}")
+    except (TypeError, AttributeError, KeyError) as e:
+        logger.error("Unexpected error analyzing STL file: %s", str(e))
         return None
 
 def optimize_stl_file_wrapper(file_path: str, optimization_level: str = 'medium') -> str:
@@ -148,28 +147,28 @@ def optimize_stl_file_wrapper(file_path: str, optimization_level: str = 'medium'
     try:
         # Use the optimizer module to get optimized mesh
         optimized_mesh = optimize_stl_file(file_path, optimization_level)
-        
+
         # Save optimized file
         optimized_filename = f"optimized_{uuid.uuid4().hex[:8]}.stl"
         optimized_path = os.path.join(app.config['UPLOAD_FOLDER'], optimized_filename)
         optimized_mesh.save(optimized_path)
-        
+
         return optimized_path
-        
+
     except PermissionError as e:
-        logger.error(f"Permission error optimizing STL file: {str(e)}")
+        logger.error("Permission error optimizing STL file: %s", str(e))
         raise
     except OSError as e:
-        logger.error(f"File system error optimizing STL file: {str(e)}")
+        logger.error("File system error optimizing STL file: %s", str(e))
         raise
     except ValueError as e:
-        logger.error(f"Invalid parameters for STL optimization: {str(e)}")
+        logger.error("Invalid parameters for STL optimization: %s", str(e))
         raise
     except RuntimeError as e:
-        logger.error(f"Runtime error optimizing STL file: {str(e)}")
+        logger.error("Runtime error optimizing STL file: %s", str(e))
         raise
-    except Exception as e:
-        logger.error(f"Unexpected error optimizing STL file: {str(e)}")
+    except (TypeError, AttributeError, KeyError) as e:
+        logger.error("Unexpected error optimizing STL file: %s", str(e))
         raise
 
 @app.route('/')
@@ -183,106 +182,106 @@ def index() -> str:
 def upload_file() -> tuple:
     """Handle STL file upload"""
     client_ip = request.remote_addr
-    
+
     # Check rate limiting
     if not check_rate_limit(client_ip, limit=5, window=60):
         return jsonify({'error': 'Rate limit exceeded. Please try again later.'}), 429
-    
+
     # Check CSRF token for API requests
     csrf_token = request.headers.get('X-CSRF-Token')
     if not csrf_token or not validate_csrf_token(csrf_token):
         return jsonify({'error': 'CSRF token missing or invalid'}), 403
-    
+
     try:
         if 'file' not in request.files:
             return jsonify({'error': 'No file provided'}), 400
-        
+
         file = request.files['file']
         if file.filename == '':
             return jsonify({'error': 'No file selected'}), 400
-        
+
         if not allowed_file(file.filename):
             return jsonify({'error': 'Invalid file type. Only STL files are allowed'}), 400
-        
+
         # Save uploaded file
         filename = secure_filename(file.filename)
         file_id = str(uuid.uuid4())
         upload_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{file_id}_{filename}")
         file.save(upload_path)
-        
+
         # Analyze the file
         analysis = analyze_stl_file(upload_path)
         if not analysis:
             os.remove(upload_path)
             return jsonify({'error': 'Failed to analyze STL file'}), 400
-        
+
         return jsonify({
             'file_id': file_id,
             'filename': filename,
             'analysis': analysis,
             'upload_time': datetime.now().isoformat()
         })
-        
+
     except PermissionError as e:
-        logger.error(f"Permission error during upload: {str(e)}")
+        logger.error("Permission error during upload: %s", str(e))
         return jsonify({'error': 'File upload failed due to permission error'}), 500
     except OSError as e:
-        logger.error(f"File system error during upload: {str(e)}")
+        logger.error("File system error during upload: %s", str(e))
         return jsonify({'error': 'File upload failed due to file system error'}), 500
     except ValueError as e:
-        logger.error(f"Invalid data during upload: {str(e)}")
+        logger.error("Invalid data during upload: %s", str(e))
         return jsonify({'error': 'File upload failed due to invalid data'}), 400
     except RuntimeError as e:
-        logger.error(f"Runtime error during upload: {str(e)}")
+        logger.error("Runtime error during upload: %s", str(e))
         return jsonify({'error': 'File upload failed due to runtime error'}), 500
-    except Exception as e:
-        logger.error(f"Upload error: {str(e)}")
+    except (TypeError, AttributeError, KeyError) as e:
+        logger.error("Upload error: %s", str(e))
         return jsonify({'error': 'File upload failed'}), 500
 
 @app.route('/api/optimize', methods=['POST'])
 def optimize_file() -> tuple:
     """Optimize uploaded STL file"""
     client_ip = request.remote_addr
-    
+
     # Check rate limiting
     if not check_rate_limit(client_ip, limit=10, window=60):
         return jsonify({'error': 'Rate limit exceeded. Please try again later.'}), 429
-    
+
     # Check CSRF token for API requests
     csrf_token = request.headers.get('X-CSRF-Token')
     if not csrf_token or not validate_csrf_token(csrf_token):
         return jsonify({'error': 'CSRF token missing or invalid'}), 403
-    
+
     try:
         data = request.get_json()
         if not data or 'file_id' not in data:
             return jsonify({'error': 'File ID required'}), 400
-        
+
         file_id = data['file_id']
         optimization_level = data.get('level', 'medium')
-        
+
         # Validate optimization level
         if optimization_level not in ['light', 'medium', 'aggressive']:
             return jsonify({'error': 'Invalid optimization level'}), 400
-        
+
         # Find the uploaded file
         upload_files = [f for f in os.listdir(app.config['UPLOAD_FOLDER']) if f.startswith(file_id)]
         if not upload_files:
             return jsonify({'error': 'File not found'}), 404
-        
+
         upload_path = os.path.join(app.config['UPLOAD_FOLDER'], upload_files[0])
-        
+
         # Optimize the file
         optimized_path = optimize_stl_file_wrapper(upload_path, optimization_level)
-        
+
         # Get file info
         original_size = os.path.getsize(upload_path)
         optimized_size = os.path.getsize(optimized_path)
         compression_ratio = (1 - optimized_size / original_size) * 100
-        
+
         # Analyze optimized file
         optimized_analysis = analyze_stl_file(optimized_path)
-        
+
         return jsonify({
             'optimization_level': optimization_level,
             'original_size': original_size,
@@ -291,21 +290,21 @@ def optimize_file() -> tuple:
             'optimized_analysis': optimized_analysis,
             'download_id': os.path.basename(optimized_path)
         })
-        
+
     except PermissionError as e:
-        logger.error(f"Permission error during optimization: {str(e)}")
+        logger.error("Permission error during optimization: %s", str(e))
         return jsonify({'error': 'Optimization failed due to permission error'}), 500
     except OSError as e:
-        logger.error(f"File system error during optimization: {str(e)}")
+        logger.error("File system error during optimization: %s", str(e))
         return jsonify({'error': 'Optimization failed due to file system error'}), 500
     except ValueError as e:
-        logger.error(f"Invalid data during optimization: {str(e)}")
+        logger.error("Invalid data during optimization: %s", str(e))
         return jsonify({'error': 'Optimization failed due to invalid data'}), 400
     except RuntimeError as e:
-        logger.error(f"Runtime error during optimization: {str(e)}")
+        logger.error("Runtime error during optimization: %s", str(e))
         return jsonify({'error': 'Optimization failed due to runtime error'}), 500
-    except Exception as e:
-        logger.error(f"Optimization error: {str(e)}")
+    except (TypeError, AttributeError, KeyError) as e:
+        logger.error("Optimization error: %s", str(e))
         return jsonify({'error': 'Optimization failed'}), 500
 
 @app.route('/api/download/<filename>')
@@ -315,41 +314,41 @@ def download_file(filename: str) -> Union[WerkzeugResponse, tuple]:
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         if not os.path.exists(file_path):
             return jsonify({'error': 'File not found'}), 404
-        
+
         return send_file(
             file_path,
             as_attachment=True,
             download_name=f'optimized_{filename}',
             mimetype='application/octet-stream'
         )
-        
+
     except PermissionError as e:
-        logger.error(f"Permission error during download: {str(e)}")
+        logger.error("Permission error during download: %s", str(e))
         return jsonify({'error': 'Download failed due to permission error'}), 500
     except OSError as e:
-        logger.error(f"File system error during download: {str(e)}")
+        logger.error("File system error during download: %s", str(e))
         return jsonify({'error': 'Download failed due to file system error'}), 500
     except ValueError as e:
-        logger.error(f"Invalid data during download: {str(e)}")
+        logger.error("Invalid data during download: %s", str(e))
         return jsonify({'error': 'Download failed due to invalid data'}), 400
-    except Exception as e:
-        logger.error(f"Download error: {str(e)}")
+    except (TypeError, AttributeError, KeyError) as e:
+        logger.error("Download error: %s", str(e))
         return jsonify({'error': 'Download failed'}), 500
 
 @app.route('/api/cleanup', methods=['POST'])
 def cleanup_files() -> tuple:
     """Clean up temporary files"""
     client_ip = request.remote_addr
-    
+
     # Check rate limiting (more lenient for cleanup)
     if not check_rate_limit(client_ip, limit=20, window=60):
         return jsonify({'error': 'Rate limit exceeded. Please try again later.'}), 429
-    
+
     # Check CSRF token for API requests
     csrf_token = request.headers.get('X-CSRF-Token')
     if not csrf_token or not validate_csrf_token(csrf_token):
         return jsonify({'error': 'CSRF token missing or invalid'}), 403
-    
+
     try:
         data = request.get_json()
         if data and 'file_id' in data:
@@ -359,7 +358,7 @@ def cleanup_files() -> tuple:
             for file in upload_files:
                 try:
                     os.remove(os.path.join(app.config['UPLOAD_FOLDER'], file))
-                except:
+                except (PermissionError, OSError, FileNotFoundError):
                     pass
         else:
             # Clean up old files (older than 1 hour)
@@ -373,22 +372,26 @@ def cleanup_files() -> tuple:
                             os.remove(file_path)
                         except (PermissionError, OSError):
                             pass
-        
+
         return jsonify({'message': 'Cleanup completed'})
-        
+
     except PermissionError as e:
-        logger.error(f"Permission error during cleanup: {str(e)}")
+        logger.error("Permission error during cleanup: %s", str(e))
         return jsonify({'error': 'Cleanup failed due to permission error'}), 500
     except OSError as e:
-        logger.error(f"File system error during cleanup: {str(e)}")
+        logger.error("File system error during cleanup: %s", str(e))
         return jsonify({'error': 'Cleanup failed due to file system error'}), 500
     except ValueError as e:
-        logger.error(f"Invalid data during cleanup: {str(e)}")
+        logger.error("Invalid data during cleanup: %s", str(e))
         return jsonify({'error': 'Cleanup failed due to invalid data'}), 400
-    except Exception as e:
-        logger.error(f"Cleanup error: {str(e)}")
+    except (TypeError, AttributeError, KeyError) as e:
+        logger.error("Cleanup error: %s", str(e))
         return jsonify({'error': 'Cleanup failed'}), 500
 
 if __name__ == '__main__':
     debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
-    app.run(debug=debug_mode, host='0.0.0.0', port=5000)
+    # Use localhost by default for security, allow override if needed
+    host = os.environ.get('FLASK_HOST', '127.0.0.1')
+    if host == '0.0.0.0':
+        logger.warning("Binding to all interfaces (0.0.0.0). Ensure this is intended and firewall is properly configured.")
+    app.run(debug=debug_mode, host=host, port=5000)
