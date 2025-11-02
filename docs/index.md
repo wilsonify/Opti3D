@@ -74,15 +74,6 @@ STL Upload → Mesh Analysis → Optimization Algorithm → Quality Validation �
 
 Each stage represents a critical decision point where we balance processing speed against optimization quality. What I find particularly interesting is how the system adapts its strategy based on mesh complexity—a lesson learned from analyzing failure patterns in early prototypes.
 
-### Security-First Design
-
-Through security audits and penetration testing, we've implemented a defense-in-depth strategy:
-
-- **CSRF Protection**: All state-changing operations require token validation
-- **Rate Limiting**: Prevents abuse while maintaining usability (10 requests/minute)
-- **File Validation**: Multi-layer validation prevents malicious uploads
-- **Temporary Storage**: Files auto-expire after 1 hour, reducing storage risks
-
 ## Quick Start: From Zero to Optimized
 
 Based on user testing, here's the most effective path to get started:
@@ -130,24 +121,6 @@ Our testing has revealed interesting insights into STL file processing:
 | 3MF | Planned | N/A | Expected: Medium |
 
 The binary vs. ASCII performance difference is particularly noteworthy—binary files process 40-50% faster due to reduced parsing overhead.
-
-## Security Validation: Evidence-Based Protection
-
-Opti3D has undergone rigorous security testing because I believe security should be provable, not just claimed:
-
-### Static Analysis (SAST) Results
-
-- **0 Critical vulnerabilities** found in core application code
-- **3 Medium severity** issues identified and resolved
-- **Dependency scanning** automated with weekly updates
-
-### Dynamic Analysis (DAST) Results
-
-- **OWASP Top 10** compliance verified
-- **API endpoint security** tested against common attack vectors
-- **File upload security** validated with malicious file testing
-
-**Detailed Reports**: [Security Recommendations](SECURITY_RECOMMENDATIONS.md) | [DAST Analysis](DAST_SECURITY_REPORT.md)
 
 ## Browser Compatibility: Real-World Testing
 

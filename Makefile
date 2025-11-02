@@ -22,44 +22,44 @@ help:
 
 # Installation
 install:
-	pip install -e .
+	uv sync --frozen --no-dev
 
 install-dev:
-	pip install -e ".[dev,security,test,docs]"
+	uv sync --frozen
 	pre-commit install
 
 # Testing
 test:
-	python -m pytest tests/ -v --cov=src --cov-report=html --cov-report=term
+	uv run pytest tests/ -v --cov=src --cov-report=html --cov-report=term
 
 test-unit:
-	python -m pytest tests/ -v -m "unit" --cov=src
+	uv run pytest tests/ -v -m "unit" --cov=src
 
 test-functional:
-	python -m pytest tests/ -v -m "integration or not unit" --cov=src
+	uv run pytest tests/ -v -m "integration or not unit" --cov=src
 
 test-security:
-	python -m pytest tests/test_security_compliance.py tests/test_flask_app.py::TestSecurityFeatures -v
+	uv run pytest tests/test_security_compliance.py tests/test_flask_app.py::TestSecurityFeatures -v
 
 # Code quality
 lint:
 	@echo "Running flake8..."
-	flake8 src/ tests/
+	uv run flake8 src/ tests/
 	@echo "Running pylint..."
-	pylint src/ tests/
+	uv run pylint src/ tests/
 	@echo "Running mypy..."
-	mypy src/
+	uv run mypy src/
 
 format:
-	black src/ tests/
-	isort src/ tests/
+	uv run black src/ tests/
+	uv run isort src/ tests/
 
 # Security
 security:
 	@echo "Running bandit security scan..."
-	bandit -r src/
+	uv run bandit -r src/
 	@echo "Running safety dependency check..."
-	safety check
+	uv run safety check
 	@echo "Running security tests..."
 	$(MAKE) test-security
 
@@ -76,7 +76,7 @@ clean:
 	find . -type f -name "*.pyc" -delete
 
 build: clean
-	python -m build
+	uv build
 
 # Docker
 docker:
@@ -87,17 +87,17 @@ docker-run:
 
 # Development servers
 run-dev:
-	python -m flask --app src/app run --debug
+	uv run flask --app src/app run --debug
 
 run-prod:
-	gunicorn --bind 0.0.0.0:5000 src.app:app
+	uv run gunicorn --bind 0.0.0.0:5000 src.app:app
 
 # Documentation
 docs:
-	cd docs && make html
+	cd docs && uv run make html
 
 docs-serve:
-	cd docs/_build/html && python -m http.server 8000
+	cd docs/_build/html && uv run python -m http.server 8000
 
 # Development workflow
 dev-setup: install-dev
@@ -108,13 +108,13 @@ ci-test: lint security test
 
 # Release
 version-patch:
-	bump2version patch
+	uv run bump2version patch
 
 version-minor:
-	bump2version minor
+	uv run bump2version minor
 
 version-major:
-	bump2version major
+	uv run bump2version major
 
 release: clean build test
 	@echo "Ready for release!"

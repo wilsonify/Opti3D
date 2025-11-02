@@ -1,5 +1,5 @@
 # Multi-stage build for Opti3D application
-FROM python:3.9-slim as builder
+FROM python:3.13-slim AS builder
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -7,35 +7,40 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Install system dependencies
+# Install system dependencies and uv
 RUN apt-get update && apt-get install -y \
     build-essential \
     libmagic1 \
     libmagic-dev \
+    curl \
     && rm -rf /var/lib/apt/lists/*
+
+# Install uv
+RUN pip install uv
 
 # Set work directory
 WORKDIR /app
 
-# Copy requirements and install Python dependencies
-COPY pyproject.toml src/requirements.txt ./
-RUN pip install --upgrade pip && \
-    pip install -e . && \
-    pip install -r src/requirements.txt
+# Copy pyproject.toml, uv.lock, LICENSE, and readme.md and install Python dependencies with uv
+COPY pyproject.toml uv.lock LICENSE readme.md ./
+RUN uv sync --frozen
 
 # Production stage
-FROM python:3.9-slim as production
+FROM python:3.13-slim AS production
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/home/appuser/.local/bin:$PATH"
 
-# Install runtime system dependencies
+# Install runtime system dependencies and uv
 RUN apt-get update && apt-get install -y \
     libmagic1 \
     curl \
     && rm -rf /var/lib/apt/lists/*
+
+# Install uv
+RUN pip install uv
 
 # Create non-root user
 RUN useradd --create-home --shell /bin/bash appuser
@@ -44,12 +49,14 @@ RUN useradd --create-home --shell /bin/bash appuser
 WORKDIR /app
 
 # Copy Python dependencies from builder stage
-COPY --from=builder /usr/local/lib/python3.9/site-packages /usr/local/lib/python3.9/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
+COPY --from=builder /root/.local /home/appuser/.local
+
+# Copy pyproject.toml, uv.lock, LICENSE, and readme.md and install with uv
+COPY pyproject.toml uv.lock LICENSE readme.md ./
+RUN uv sync --frozen --no-dev
 
 # Copy application code
 COPY src/ ./src/
-COPY templates/ ./templates/
 COPY static/ ./static/
 
 # Change ownership to appuser
@@ -66,4 +73,4 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
 EXPOSE 5000
 
 # Default command
-CMD ["python", "-m", "stldeli"]
+CMD ["uv", "run", "python", "-m", "stldeli"]
