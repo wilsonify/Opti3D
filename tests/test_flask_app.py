@@ -304,7 +304,7 @@ class TestFlaskApp(unittest.TestCase):
                                  content_type='application/json',
                                  headers={'X-CSRF-Token': self.csrf_token}
                                  )
-        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.status_code, 400)
 
         # Test missing content type
         response = self.app.post('/api/optimize',

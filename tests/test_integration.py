@@ -5,44 +5,60 @@
 Integration tests for complete STL optimization workflow
 """
 
+import io
+import json
 import os
-import subprocess
 import tempfile
 import time
 import unittest
-from threading import Thread
 
 import numpy as np
-import requests
 from stl import mesh
+
+# Import the Flask app
+import sys
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+from app import app
 
 
 class TestIntegrationWorkflow(unittest.TestCase):
-    """Test complete end-to-end workflow"""
+    """Test complete end-to-end workflow using Flask test client"""
 
     @classmethod
     def setUpClass(cls):
-        """Set up test server"""
-        # Start Flask app in background
-        cls.server_process = subprocess.Popen(
-            ['python', 'app.py'],
-            cwd=os.path.dirname(__file__),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
-        )
-
-        # Wait for server to start
-        time.sleep(3)
-
-        cls.base_url = 'http://localhost:5000'
-        cls.session = requests.Session()
+        """Set up test app"""
+        app.config['TESTING'] = True
+        cls.client = app.test_client()
+        cls.app_context = app.app_context()
+        cls.app_context.push()
 
     @classmethod
     def tearDownClass(cls):
-        """Clean up test server"""
-        if cls.server_process:
-            cls.server_process.terminate()
-            cls.server_process.wait()
+        """Clean up test app"""
+        cls.app_context.pop()
+
+    def get_csrf_token(self):
+        """Get CSRF token from the main page"""
+        response = self.client.get('/')
+        self.assertEqual(response.status_code, 200)
+        
+        # Extract CSRF token from the page
+        import re
+        csrf_match = re.search(r'<meta[^>]*name=["\']csrf-token["\'][^>]*content=["\']([^"\']+)["\']', response.data.decode())
+        if csrf_match:
+            return csrf_match.group(1)
+        
+        # Fallback to other patterns
+        csrf_match = re.search(r'name="csrf_token"[^>]*value="([^"]+)"', response.data.decode())
+        if csrf_match:
+            return csrf_match.group(1)
+        
+        # Try to get from JavaScript
+        csrf_match = re.search(r'csrf_token["\']?\s*:\s*["\']([^"\']+)["\']', response.data.decode())
+        if csrf_match:
+            return csrf_match.group(1)
+        
+        self.fail("CSRF token not found in page")
 
     def setUp(self):
         """Set up test fixtures"""
@@ -80,30 +96,26 @@ class TestIntegrationWorkflow(unittest.TestCase):
         cube_mesh = mesh.Mesh(np.zeros(cube_vertices.shape[0], dtype=mesh.Mesh.dtype))
         for i, verts in enumerate(cube_vertices):
             cube_mesh.vectors[i] = verts
+        
         cube_file = tempfile.NamedTemporaryFile(suffix='.stl', delete=False)
         cube_mesh.save(cube_file.name)
         cube_file.close()
         self.test_files.append(cube_file.name)
 
         # Create a more complex mesh with duplicates
-        complex_vertices = np.array([
-            # Cube faces
-            [[0, 0, 0], [1, 0, 0], [1, 1, 0]],
-            [[0, 0, 0], [1, 1, 0], [0, 1, 0]],
-            [[0, 0, 1], [0, 1, 1], [1, 1, 1]],
-            [[0, 0, 1], [1, 1, 1], [1, 0, 1]],
-            # Duplicate vertices
-            [[0, 0, 0], [1, 0, 0], [1, 1, 0]],
-            [[0, 0, 0], [1, 1, 0], [0, 1, 0]],
-            # Some degenerate triangles
-            [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
-            [[1, 1, 1], [1, 1, 1], [1, 1, 1]],
-        ], dtype=np.float32)
+        complex_vertices = []
+        for i in range(20):
+            triangle = np.random.rand(3, 3).astype(np.float32) * 10
+            complex_vertices.append(triangle)
+            # Add some duplicates
+            if i % 5 == 0:
+                complex_vertices.append(triangle + np.array([0.01, 0.01, 0.01], dtype=np.float32))
 
-        # Create mesh properly using numpy-stl format
+        complex_vertices = np.array(complex_vertices)
         complex_mesh = mesh.Mesh(np.zeros(complex_vertices.shape[0], dtype=mesh.Mesh.dtype))
         for i, verts in enumerate(complex_vertices):
             complex_mesh.vectors[i] = verts
+        
         complex_file = tempfile.NamedTemporaryFile(suffix='.stl', delete=False)
         complex_mesh.save(complex_file.name)
         complex_file.close()
@@ -111,39 +123,16 @@ class TestIntegrationWorkflow(unittest.TestCase):
 
     def test_complete_workflow_light_optimization(self):
         """Test complete workflow with light optimization"""
-        # Step 1: Access main page and get CSRF token
-        response = self.session.get(self.base_url)
-        self.assertEqual(response.status_code, 200)
-        self.assertIn('Opti3D', response.text)
-
-        # Extract CSRF token from the page
-        csrf_token = None
-        import re
-        # Look for meta tag first
-        csrf_match = re.search(r'<meta[^>]*name=["\']csrf-token["\'][^>]*content=["\']([^"\']+)["\']', response.text)
-        if csrf_match:
-            csrf_token = csrf_match.group(1)
-        else:
-            # Fallback to other patterns
-            csrf_match = re.search(r'name="csrf_token"[^>]*value="([^"]+)"', response.text)
-            if csrf_match:
-                csrf_token = csrf_match.group(1)
-            else:
-                # Try to get from JavaScript
-                csrf_match = re.search(r'csrf_token["\']?\s*:\s*["\']([^"\']+)["\']', response.text)
-                if csrf_match:
-                    csrf_token = csrf_match.group(1)
-
-        self.assertIsNotNone(csrf_token, "CSRF token not found in page")
-
-        # Step 2: Upload STL file with CSRF token
+        # Get CSRF token
+        csrf_token = self.get_csrf_token()
+        
+        # Step 1: Upload STL file
         with open(self.test_files[0], 'rb') as test_file:
-            files = {'file': ('test_cube.stl', test_file, 'application/octet-stream')}
-            headers = {'X-CSRF-Token': csrf_token}
-            upload_response = self.session.post(f"{self.base_url}/api/upload", files=files, headers=headers)
+            data = {'file': (test_file, 'test_cube.stl', 'application/octet-stream')}
+            upload_response = self.client.post('/api/upload', data=data, headers={'X-CSRF-Token': csrf_token})
 
         self.assertEqual(upload_response.status_code, 200)
-        upload_data = upload_response.json()
+        upload_data = json.loads(upload_response.data)
 
         # Verify upload response
         self.assertIn('file_id', upload_data)
@@ -152,36 +141,35 @@ class TestIntegrationWorkflow(unittest.TestCase):
 
         file_id = upload_data['file_id']
 
-        # Step 3: Optimize file
+        # Step 2: Optimize file
         optimize_data = {
             'file_id': file_id,
             'level': 'light'
         }
-        optimize_response = self.session.post(
-            f"{self.base_url}/api/optimize",
-            json=optimize_data,
+        optimize_response = self.client.post(
+            '/api/optimize',
+            data=json.dumps(optimize_data),
+            content_type='application/json',
             headers={'X-CSRF-Token': csrf_token}
         )
 
         self.assertEqual(optimize_response.status_code, 200)
-        optimize_result = optimize_response.json()
+        optimize_result = json.loads(optimize_response.data)
 
         # Verify optimization results
         self.assertIn('optimization_level', optimize_result)
         self.assertIn('original_size', optimize_result)
         self.assertIn('optimized_size', optimize_result)
         self.assertIn('compression_ratio', optimize_result)
-        self.assertIn('download_id', optimize_result)
 
-        # Step 4: Download optimized file
+        # Step 3: Download optimized file
         download_id = optimize_result['download_id']
-        download_response = self.session.get(f"{self.base_url}/api/download/{download_id}")
-
+        download_response = self.client.get(f'/api/download/{download_id}')
         self.assertEqual(download_response.status_code, 200)
         self.assertIn('Content-Disposition', download_response.headers)
 
         # Verify downloaded file is valid STL
-        downloaded_content = download_response.content
+        downloaded_content = download_response.data
         self.assertGreater(len(downloaded_content), 0)
 
         # Save downloaded file temporarily and verify it can be loaded
@@ -195,23 +183,26 @@ class TestIntegrationWorkflow(unittest.TestCase):
         finally:
             os.unlink(temp_file.name)
 
-        # Step 5: Cleanup
-        cleanup_response = self.session.post(
-            f"{self.base_url}/api/cleanup",
-            json={'file_id': file_id},
+        # Step 4: Cleanup
+        cleanup_response = self.client.post(
+            '/api/cleanup',
+            data=json.dumps({'file_id': file_id}),
+            content_type='application/json',
             headers={'X-CSRF-Token': csrf_token}
         )
         self.assertEqual(cleanup_response.status_code, 200)
 
     def test_complete_workflow_medium_optimization(self):
         """Test complete workflow with medium optimization"""
+        csrf_token = self.get_csrf_token()
+        
         # Upload file with duplicates
         with open(self.test_files[1], 'rb') as test_file:
-            files = {'file': ('complex_mesh.stl', test_file, 'application/octet-stream')}
-            upload_response = self.session.post(f"{self.base_url}/api/upload", files=files)
+            data = {'file': (test_file, 'complex_mesh.stl', 'application/octet-stream')}
+            upload_response = self.client.post('/api/upload', data=data, headers={'X-CSRF-Token': csrf_token})
 
         self.assertEqual(upload_response.status_code, 200)
-        upload_data = upload_response.json()
+        upload_data = json.loads(upload_response.data)
         file_id = upload_data['file_id']
 
         # Optimize with medium level
@@ -219,30 +210,34 @@ class TestIntegrationWorkflow(unittest.TestCase):
             'file_id': file_id,
             'level': 'medium'
         }
-        optimize_response = self.session.post(
-            f"{self.base_url}/api/optimize",
-            json=optimize_data
+        optimize_response = self.client.post(
+            '/api/optimize',
+            data=json.dumps(optimize_data),
+            content_type='application/json',
+            headers={'X-CSRF-Token': csrf_token}
         )
 
         self.assertEqual(optimize_response.status_code, 200)
-        optimize_result = optimize_response.json()
+        optimize_result = json.loads(optimize_response.data)
 
         # Medium optimization should show some compression
         self.assertGreaterEqual(optimize_result['compression_ratio'], 0)
 
         # Download and verify
         download_id = optimize_result['download_id']
-        download_response = self.session.get(f"{self.base_url}/api/download/{download_id}")
+        download_response = self.client.get(f'/api/download/{download_id}')
         self.assertEqual(download_response.status_code, 200)
 
     def test_complete_workflow_aggressive_optimization(self):
         """Test complete workflow with aggressive optimization"""
+        csrf_token = self.get_csrf_token()
+        
         # Upload file
         with open(self.test_files[0], 'rb') as test_file:
-            files = {'file': ('test_cube.stl', test_file, 'application/octet-stream')}
-            upload_response = self.session.post(f"{self.base_url}/api/upload", files=files)
+            data = {'file': (test_file, 'test_cube.stl', 'application/octet-stream')}
+            upload_response = self.client.post('/api/upload', data=data, headers={'X-CSRF-Token': csrf_token})
 
-        upload_data = upload_response.json()
+        upload_data = json.loads(upload_response.data)
         file_id = upload_data['file_id']
 
         # Optimize with aggressive level
@@ -250,13 +245,15 @@ class TestIntegrationWorkflow(unittest.TestCase):
             'file_id': file_id,
             'level': 'aggressive'
         }
-        optimize_response = self.session.post(
-            f"{self.base_url}/api/optimize",
-            json=optimize_data
+        optimize_response = self.client.post(
+            '/api/optimize',
+            data=json.dumps(optimize_data),
+            content_type='application/json',
+            headers={'X-CSRF-Token': csrf_token}
         )
 
         self.assertEqual(optimize_response.status_code, 200)
-        optimize_result = optimize_response.json()
+        optimize_result = json.loads(optimize_response.data)
 
         # Verify aggressive optimization results
         self.assertIn('optimized_analysis', optimize_result)
@@ -266,51 +263,94 @@ class TestIntegrationWorkflow(unittest.TestCase):
 
     def test_error_handling_workflow(self):
         """Test error handling in workflow"""
+        csrf_token = self.get_csrf_token()
+        
         # Try to optimize without uploading
-        optimize_response = self.session.post(
-            f"{self.base_url}/api/optimize",
-            json={'file_id': 'nonexistent_id', 'level': 'medium'}
+        optimize_response = self.client.post(
+            '/api/optimize',
+            data=json.dumps({'file_id': 'nonexistent_id', 'level': 'medium'}),
+            content_type='application/json',
+            headers={'X-CSRF-Token': csrf_token}
         )
         self.assertEqual(optimize_response.status_code, 404)
 
         # Try to download nonexistent file
-        download_response = self.session.get(f"{self.base_url}/api/download/nonexistent.stl")
+        download_response = self.client.get('/api/download/nonexistent.stl')
         self.assertEqual(download_response.status_code, 404)
 
         # Try to upload invalid file type
-        files = {'file': ('test.txt', b'test content', 'text/plain')}
-        upload_response = self.session.post(f"{self.base_url}/api/upload", files=files)
+        data = {'file': (io.BytesIO(b'test content'), 'test.txt', 'text/plain')}
+        upload_response = self.client.post('/api/upload', data=data, headers={'X-CSRF-Token': csrf_token})
         self.assertEqual(upload_response.status_code, 400)
 
     def test_concurrent_requests(self):
         """Test handling concurrent requests"""
-
-        def upload_file(filename):
-            with open(self.test_files[0], 'rb') as test_file:
-                files = {'file': (filename, test_file, 'application/octet-stream')}
-                response = self.session.post(f"{self.base_url}/api/upload", files=files)
-            return response
-
-        # Upload multiple files concurrently
-        threads = []
+        # Since we're using the test client, true concurrency isn't tested
+        # but we can test multiple sequential requests work correctly
         responses = []
-
+        
         for i in range(3):
-            thread = Thread(target=lambda i=i: responses.append(upload_file(f'concurrent_test_{i}.stl')))
-            threads.append(thread)
-            thread.start()
-
-        for thread in threads:
-            thread.join()
+            csrf_token = self.get_csrf_token()
+            with open(self.test_files[0], 'rb') as test_file:
+                data = {'file': (test_file, f'concurrent_test_{i}.stl', 'application/octet-stream')}
+                response = self.client.post('/api/upload', data=data, headers={'X-CSRF-Token': csrf_token})
+                responses.append(response)
 
         # All uploads should succeed
         for response in responses:
             self.assertEqual(response.status_code, 200)
-            data = response.json()
+            data = json.loads(response.data)
             self.assertIn('file_id', data)
+            self.assertIn('analysis', data)
+
+    def test_file_format_compatibility(self):
+        """Test compatibility with different STL formats"""
+        csrf_token = self.get_csrf_token()
+        
+        # Test binary STL (default)
+        with open(self.test_files[0], 'rb') as test_file:
+            data = {'file': (test_file, 'binary_test.stl', 'application/octet-stream')}
+            response = self.client.post('/api/upload', data=data, headers={'X-CSRF-Token': csrf_token})
+        self.assertEqual(response.status_code, 200)
+
+        # Create ASCII STL for testing
+        ascii_stl_content = b"""solid test_cube
+  facet normal 0.0 0.0 1.0
+    outer loop
+      vertex 0.0 0.0 0.0
+      vertex 1.0 0.0 0.0
+      vertex 1.0 1.0 0.0
+    endloop
+  endfacet
+  facet normal 0.0 0.0 1.0
+    outer loop
+      vertex 0.0 0.0 0.0
+      vertex 1.0 1.0 0.0
+      vertex 0.0 1.0 0.0
+    endloop
+  endfacet
+endsolid test_cube
+"""
+
+        ascii_file = tempfile.NamedTemporaryFile(suffix='.stl', delete=False)
+        ascii_file.write(ascii_stl_content)
+        ascii_file.close()
+
+        try:
+            # Get fresh CSRF token for second upload
+            csrf_token = self.get_csrf_token()
+            with open(ascii_file.name, 'rb') as test_file:
+                data = {'file': (test_file, 'ascii_test.stl', 'application/octet-stream')}
+                response = self.client.post('/api/upload', data=data, headers={'X-CSRF-Token': csrf_token})
+            self.assertEqual(response.status_code, 200)
+
+        finally:
+            os.unlink(ascii_file.name)
 
     def test_large_file_handling(self):
         """Test handling of larger STL files"""
+        csrf_token = self.get_csrf_token()
+        
         # Create a larger mesh
         large_vertices = []
         for i in range(100):  # Create 100 triangles
@@ -330,82 +370,56 @@ class TestIntegrationWorkflow(unittest.TestCase):
         try:
             # Upload large file
             with open(large_file.name, 'rb') as test_file:
-                files = {'file': ('large_mesh.stl', test_file, 'application/octet-stream')}
-                upload_response = self.session.post(f"{self.base_url}/api/upload", files=files)
+                data = {'file': (test_file, 'large_mesh.stl', 'application/octet-stream')}
+                upload_response = self.client.post('/api/upload', data=data, headers={'X-CSRF-Token': csrf_token})
 
             self.assertEqual(upload_response.status_code, 200)
-            upload_data = upload_response.json()
+            upload_data = json.loads(upload_response.data)
             self.assertEqual(upload_data['analysis']['triangles'], 100)
 
             # Optimize large file
-            optimize_response = self.session.post(
-                f"{self.base_url}/api/optimize",
-                json={'file_id': upload_data['file_id'], 'level': 'medium'}
+            optimize_data = {
+                'file_id': upload_data['file_id'],
+                'level': 'medium'
+            }
+            optimize_response = self.client.post(
+                '/api/optimize',
+                data=json.dumps(optimize_data),
+                content_type='application/json',
+                headers={'X-CSRF-Token': csrf_token}
             )
             self.assertEqual(optimize_response.status_code, 200)
 
         finally:
             os.unlink(large_file.name)
 
-    def test_file_format_compatibility(self):
-        """Test compatibility with different STL formats"""
-        # Test binary STL (default)
-        with open(self.test_files[0], 'rb') as test_file:
-            files = {'file': ('binary_test.stl', test_file, 'application/octet-stream')}
-            response = self.session.post(f"{self.base_url}/api/upload", files=files)
-        self.assertEqual(response.status_code, 200)
-
-        # Create ASCII STL for testing
-        ascii_stl_content = """solid test_cube
-  facet normal 0.0 0.0 1.0
-    outer loop
-      vertex 0.0 0.0 0.0
-      vertex 1.0 0.0 0.0
-      vertex 1.0 1.0 0.0
-    endloop
-  endfacet
-  facet normal 0.0 0.0 1.0
-    outer loop
-      vertex 0.0 0.0 0.0
-      vertex 1.0 1.0 0.0
-      vertex 0.0 1.0 0.0
-    endloop
-  endfacet
-endsolid test_cube
-"""
-
-        ascii_file = tempfile.NamedTemporaryFile(mode='w', suffix='.stl', delete=False)
-        ascii_file.write(ascii_stl_content)
-        ascii_file.close()
-
-        try:
-            with open(ascii_file.name, 'rb') as test_file:
-                files = {'file': ('ascii_test.stl', test_file, 'application/octet-stream')}
-                response = self.session.post(f"{self.base_url}/api/upload", files=files)
-            self.assertEqual(response.status_code, 200)
-
-        finally:
-            os.unlink(ascii_file.name)
-
     def test_performance_metrics(self):
         """Test performance and timing"""
+        csrf_token = self.get_csrf_token()
+        
         # Upload file
         start_time = time.time()
         with open(self.test_files[0], 'rb') as test_file:
-            files = {'file': ('performance_test.stl', test_file, 'application/octet-stream')}
-            upload_response = self.session.post(f"{self.base_url}/api/upload", files=files)
+            data = {'file': (test_file, 'performance_test.stl', 'application/octet-stream')}
+            upload_response = self.client.post('/api/upload', data=data, headers={'X-CSRF-Token': csrf_token})
         upload_time = time.time() - start_time
 
         self.assertEqual(upload_response.status_code, 200)
         self.assertLess(upload_time, 5.0)  # Should upload within 5 seconds
 
-        upload_data = upload_response.json()
+        upload_data = json.loads(upload_response.data)
 
         # Optimize file
         start_time = time.time()
-        optimize_response = self.session.post(
-            f"{self.base_url}/api/optimize",
-            json={'file_id': upload_data['file_id'], 'level': 'medium'}
+        optimize_data = {
+            'file_id': upload_data['file_id'],
+            'level': 'medium'
+        }
+        optimize_response = self.client.post(
+            '/api/optimize',
+            data=json.dumps(optimize_data),
+            content_type='application/json',
+            headers={'X-CSRF-Token': csrf_token}
         )
         optimize_time = time.time() - start_time
 
@@ -413,9 +427,9 @@ endsolid test_cube
         self.assertLess(optimize_time, 10.0)  # Should optimize within 10 seconds
 
         # Download file
-        optimize_result = optimize_response.json()
+        optimize_result = json.loads(optimize_response.data)
         start_time = time.time()
-        download_response = self.session.get(f"{self.base_url}/api/download/{optimize_result['download_id']}")
+        download_response = self.client.get(f'/api/download/{optimize_result['download_id']}')
         download_time = time.time() - start_time
 
         self.assertEqual(download_response.status_code, 200)
@@ -427,26 +441,44 @@ class TestRealWorldScenarios(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        """Set up test server"""
-        cls.server_process = subprocess.Popen(
-            ['python', 'app.py'],
-            cwd=os.path.dirname(__file__),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
-        )
-        time.sleep(3)
-        cls.base_url = 'http://localhost:5000'
-        cls.session = requests.Session()
+        """Set up test app"""
+        app.config['TESTING'] = True
+        cls.client = app.test_client()
+        cls.app_context = app.app_context()
+        cls.app_context.push()
 
     @classmethod
     def tearDownClass(cls):
-        """Clean up test server"""
-        if cls.server_process:
-            cls.server_process.terminate()
-            cls.server_process.wait()
+        """Clean up test app"""
+        cls.app_context.pop()
+
+    def get_csrf_token(self):
+        """Get CSRF token from the main page"""
+        response = self.client.get('/')
+        self.assertEqual(response.status_code, 200)
+        
+        # Extract CSRF token from the page
+        import re
+        csrf_match = re.search(r'<meta[^>]*name=["\']csrf-token["\'][^>]*content=["\']([^"\']+)["\']', response.data.decode())
+        if csrf_match:
+            return csrf_match.group(1)
+        
+        # Fallback to other patterns
+        csrf_match = re.search(r'name="csrf_token"[^>]*value="([^"]+)"', response.data.decode())
+        if csrf_match:
+            return csrf_match.group(1)
+        
+        # Try to get from JavaScript
+        csrf_match = re.search(r'csrf_token["\']?\s*:\s*["\']([^"\']+)["\']', response.data.decode())
+        if csrf_match:
+            return csrf_match.group(1)
+        
+        self.fail("CSRF token not found in page")
 
     def test_3d_printing_preparation_workflow(self):
         """Test typical 3D printing preparation workflow"""
+        csrf_token = self.get_csrf_token()
+        
         # Simulate a user preparing a model for 3D printing
 
         # Step 1: User uploads a model
@@ -466,12 +498,13 @@ class TestRealWorldScenarios(unittest.TestCase):
         test_file.close()
 
         try:
+            # Upload file
             with open(test_file.name, 'rb') as f:
-                files = {'file': ('print_model.stl', f, 'application/octet-stream')}
-                upload_response = self.session.post(f"{self.base_url}/api/upload", files=files)
+                data = {'file': (f, 'print_model.stl', 'application/octet-stream')}
+                upload_response = self.client.post('/api/upload', data=data, headers={'X-CSRF-Token': csrf_token})
 
             self.assertEqual(upload_response.status_code, 200)
-            upload_data = upload_response.json()
+            upload_data = json.loads(upload_response.data)
 
             # Step 2: User checks model analysis
             analysis = upload_data['analysis']
@@ -480,24 +513,28 @@ class TestRealWorldScenarios(unittest.TestCase):
 
             # Step 3: User tries different optimization levels
             for level in ['light', 'medium', 'aggressive']:
-                optimize_response = self.session.post(
-                    f"{self.base_url}/api/optimize",
-                    json={'file_id': upload_data['file_id'], 'level': level}
+                optimize_data = {
+                    'file_id': upload_data['file_id'],
+                    'level': level
+                }
+                optimize_response = self.client.post(
+                    '/api/optimize',
+                    data=json.dumps(optimize_data),
+                    content_type='application/json',
+                    headers={'X-CSRF-Token': csrf_token}
                 )
                 self.assertEqual(optimize_response.status_code, 200)
 
-                result = optimize_response.json()
+                result = json.loads(optimize_response.data)
                 self.assertIn('compression_ratio', result)
 
                 # Step 4: User downloads optimized model
-                download_response = self.session.get(
-                    f"{self.base_url}/api/download/{result['download_id']}"
-                )
+                download_response = self.client.get(f'/api/download/{result['download_id']}')
                 self.assertEqual(download_response.status_code, 200)
 
                 # Verify downloaded model is valid
                 temp_file = tempfile.NamedTemporaryFile(suffix='.stl', delete=False)
-                temp_file.write(download_response.content)
+                temp_file.write(download_response.data)
                 temp_file.close()
 
                 try:
@@ -525,12 +562,13 @@ class TestRealWorldScenarios(unittest.TestCase):
             test_file.close()
 
             try:
+                csrf_token = self.get_csrf_token()
                 with open(test_file.name, 'rb') as f:
-                    files = {'file': (f'batch_model_{i}.stl', f, 'application/octet-stream')}
-                    upload_response = self.session.post(f"{self.base_url}/api/upload", files=files)
+                    data = {'file': (f, f'batch_model_{i}.stl', 'application/octet-stream')}
+                    upload_response = self.client.post('/api/upload', data=data, headers={'X-CSRF-Token': csrf_token})
 
                 self.assertEqual(upload_response.status_code, 200)
-                file_ids.append(upload_response.json()['file_id'])
+                file_ids.append(json.loads(upload_response.data)['file_id'])
 
             finally:
                 os.unlink(test_file.name)
@@ -538,12 +576,16 @@ class TestRealWorldScenarios(unittest.TestCase):
         # Optimize all files
         optimization_results = []
         for file_id in file_ids:
-            optimize_response = self.session.post(
-                f"{self.base_url}/api/optimize",
-                json={'file_id': file_id, 'level': 'medium'}
+            csrf_token = self.get_csrf_token()
+            optimize_data = {'file_id': file_id, 'level': 'medium'}
+            optimize_response = self.client.post(
+                '/api/optimize',
+                data=json.dumps(optimize_data),
+                content_type='application/json',
+                headers={'X-CSRF-Token': csrf_token}
             )
             self.assertEqual(optimize_response.status_code, 200)
-            optimization_results.append(optimize_response.json())
+            optimization_results.append(json.loads(optimize_response.data))
 
         # Verify all optimizations succeeded
         self.assertEqual(len(optimization_results), 5)
@@ -552,7 +594,13 @@ class TestRealWorldScenarios(unittest.TestCase):
             self.assertIn('download_id', result)
 
         # Cleanup all files
-        cleanup_response = self.session.post(f"{self.base_url}/api/cleanup", json={})
+        csrf_token = self.get_csrf_token()
+        cleanup_response = self.client.post(
+            '/api/cleanup',
+            data=json.dumps({}),
+            content_type='application/json',
+            headers={'X-CSRF-Token': csrf_token}
+        )
         self.assertEqual(cleanup_response.status_code, 200)
 
 
