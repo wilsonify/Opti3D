@@ -9,6 +9,7 @@ import io
 import json
 import os
 import secrets
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -16,6 +17,8 @@ from unittest.mock import patch
 import numpy as np
 from stl import mesh
 
+# Add src directory to Python path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 from app import app
 
 
@@ -204,7 +207,7 @@ class TestFlaskApp(unittest.TestCase):
                                  content_type='application/json',
                                  headers={'X-CSRF-Token': self.csrf_token}
                                  )
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 400)
         data = json.loads(response.data)
         self.assertIn('error', data)
         self.assertEqual(data['error'], 'File not found')
@@ -253,9 +256,10 @@ class TestFlaskApp(unittest.TestCase):
     def test_download_nonexistent_file(self):
         """Test download endpoint with nonexistent file"""
         response = self.app.get('/api/download/nonexistent_file.stl')
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 400)
         data = json.loads(response.data)
         self.assertIn('error', data)
+        self.assertEqual(data['error'], 'Invalid file for download')
 
     def test_cleanup_specific_file(self):
         """Test cleanup endpoint for specific file"""

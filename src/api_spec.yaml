@@ -1,0 +1,583 @@
+openapi: 3.0.3
+info:
+  title: Opti3D STL File Optimization API
+  description: |
+    A comprehensive REST API for optimizing STL files for 3D printing.
+    
+    This API provides endpoints for uploading STL files, analyzing their properties,
+    applying different levels of optimization, and downloading the optimized results.
+    
+    ## Features
+    - File upload with validation and security checks
+    - STL file analysis (triangles, vertices, dimensions)
+    - Multi-level optimization (light, medium, aggressive)
+    - Download optimized files
+    - Automatic cleanup of temporary files
+    - Rate limiting and CSRF protection
+    - Health checks and monitoring
+  version: 1.0.0
+  contact:
+    name: Opti3D Support
+    email: support@opti3d.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:5000
+    description: Development server
+  - url: https://api.opti3d.com
+    description: Production server
+
+paths:
+  /:
+    get:
+      summary: Get main application page
+      description: Returns the main web interface for STL file optimization
+      responses:
+        '200':
+          description: HTML page returned successfully
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /api/upload:
+    post:
+      summary: Upload STL file for processing
+      description: |
+        Upload an STL file to the server for analysis and optimization.
+        The file will be validated for format, size, and security.
+      security:
+        - CSRFToken: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The STL file to upload (max 100MB)
+      responses:
+        '200':
+          description: File uploaded and analyzed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/optimize:
+    post:
+      summary: Optimize uploaded STL file
+      description: |
+        Apply optimization to a previously uploaded STL file.
+        Different optimization levels are available with varying compression ratios.
+      security:
+        - CSRFToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OptimizeRequest'
+      responses:
+        '200':
+          description: File optimized successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OptimizeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/download/{filename}:
+    get:
+      summary: Download optimized STL file
+      description: Download a previously optimized STL file
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^optimized_[a-f0-9]{8}_[0-9]+\\.stl$'
+          description: The filename of the optimized file to download
+      responses:
+        '200':
+          description: File download started
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+          headers:
+            Content-Disposition:
+              description: File attachment information
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/cleanup:
+    post:
+      summary: Clean up temporary files
+      description: |
+        Remove temporary files from the server.
+        Can clean up specific files by ID or all expired files.
+      security:
+        - CSRFToken: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                file_id:
+                  type: string
+                  description: Specific file ID to clean up (optional)
+      responses:
+        '200':
+          description: Cleanup completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CleanupResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/health:
+    get:
+      summary: Health check endpoint
+      description: Check the health and status of the application
+      responses:
+        '200':
+          description: Application is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: Application is unhealthy or degraded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /api/metrics:
+    get:
+      summary: Get application metrics
+      description: Retrieve various metrics about the application usage and performance
+      responses:
+        '200':
+          description: Metrics retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetricsResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/info:
+    get:
+      summary: Get application information
+      description: Retrieve information about the API and available endpoints
+      responses:
+        '200':
+          description: Application information retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InfoResponse'
+
+components:
+  securitySchemes:
+    CSRFToken:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+      description: CSRF token required for all POST requests
+
+  schemas:
+    UploadResponse:
+      type: object
+      required:
+        - file_id
+        - filename
+        - analysis
+        - upload_time
+        - file_size
+        - status
+      properties:
+        file_id:
+          type: string
+          format: uuid
+          description: Unique identifier for the uploaded file
+        filename:
+          type: string
+          description: Original filename of the uploaded file
+        analysis:
+          $ref: '#/components/schemas/STLAnalysis'
+        upload_time:
+          type: string
+          format: date-time
+          description: Timestamp when the file was uploaded
+        file_size:
+          type: integer
+          format: int64
+          description: Size of the uploaded file in bytes
+        status:
+          type: string
+          enum: [success]
+          description: Upload status
+
+    STLAnalysis:
+      type: object
+      required:
+        - vertices
+        - triangles
+        - dimensions
+        - min_coords
+        - max_coords
+        - volume
+        - surface_area
+      properties:
+        vertices:
+          type: integer
+          description: Number of vertices in the mesh
+        triangles:
+          type: integer
+          description: Number of triangles in the mesh
+        dimensions:
+          $ref: '#/components/schemas/Dimensions'
+        min_coords:
+          $ref: '#/components/schemas/Coordinates'
+        max_coords:
+          $ref: '#/components/schemas/Coordinates'
+        volume:
+          type: number
+          format: float
+          description: Volume of the mesh
+        surface_area:
+          type: number
+          format: float
+          description: Surface area of the mesh
+        file_size:
+          type: integer
+          format: int64
+          description: File size in bytes
+        file_path:
+          type: string
+          description: Path to the analyzed file
+
+    Dimensions:
+      type: object
+      required:
+        - x
+        - y
+        - z
+      properties:
+        x:
+          type: number
+          format: float
+          description: Dimension along X axis
+        y:
+          type: number
+          format: float
+          description: Dimension along Y axis
+        z:
+          type: number
+          format: float
+          description: Dimension along Z axis
+
+    Coordinates:
+      type: object
+      required:
+        - x
+        - y
+        - z
+      properties:
+        x:
+          type: number
+          format: float
+          description: X coordinate
+        y:
+          type: number
+          format: float
+          description: Y coordinate
+        z:
+          type: number
+          format: float
+          description: Z coordinate
+
+    OptimizeRequest:
+      type: object
+      required:
+        - file_id
+      properties:
+        file_id:
+          type: string
+          description: ID of the file to optimize
+        level:
+          type: string
+          enum: [light, medium, aggressive]
+          default: medium
+          description: Optimization level to apply
+
+    OptimizeResponse:
+      type: object
+      required:
+        - optimization_level
+        - original_size
+        - optimized_size
+        - compression_ratio
+        - download_id
+        - status
+      properties:
+        optimization_level:
+          type: string
+          enum: [light, medium, aggressive]
+          description: Applied optimization level
+        original_size:
+          type: integer
+          format: int64
+          description: Original file size in bytes
+        optimized_size:
+          type: integer
+          format: int64
+          description: Optimized file size in bytes
+        compression_ratio:
+          type: number
+          format: float
+          description: Compression percentage achieved
+        optimized_analysis:
+          $ref: '#/components/schemas/STLAnalysis'
+          description: Analysis of the optimized file
+        download_id:
+          type: string
+          description: ID for downloading the optimized file
+        processing_time:
+          type: number
+          format: float
+          description: Time taken for optimization in seconds
+        status:
+          type: string
+          enum: [success]
+          description: Optimization status
+
+    CleanupResponse:
+      type: object
+      required:
+        - message
+        - files_removed
+        - processing_time
+        - status
+      properties:
+        message:
+          type: string
+          description: Cleanup status message
+        files_removed:
+          type: integer
+          description: Number of files removed
+        processing_time:
+          type: number
+          format: float
+          description: Time taken for cleanup in seconds
+        status:
+          type: string
+          enum: [success]
+          description: Cleanup status
+
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - timestamp
+        - version
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+          description: Overall health status
+        timestamp:
+          type: string
+          format: date-time
+          description: Health check timestamp
+        version:
+          type: string
+          description: Application version
+        checks:
+          type: object
+          properties:
+            upload_directory:
+              type: string
+              enum: [ok, error]
+              description: Upload directory status
+            disk_space:
+              type: string
+              enum: [ok, warning]
+              description: Disk space status
+            memory:
+              type: string
+              enum: [ok, warning]
+              description: Memory usage status
+        error:
+          type: string
+          description: Error message if status is unhealthy
+
+    MetricsResponse:
+      type: object
+      required:
+        - timestamp
+        - metrics
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          description: Metrics collection timestamp
+        metrics:
+          type: object
+          required:
+            - uploaded_files
+            - total_storage_used
+            - active_rate_limited_ips
+            - uptime_seconds
+          properties:
+            uploaded_files:
+              type: integer
+              description: Number of uploaded files
+            total_storage_used:
+              type: integer
+              format: int64
+              description: Total storage used in bytes
+            active_rate_limited_ips:
+              type: integer
+              description: Number of IPs being rate limited
+            uptime_seconds:
+              type: number
+              format: float
+              description: Application uptime in seconds
+
+    InfoResponse:
+      type: object
+      required:
+        - name
+        - description
+        - version
+        - endpoints
+        - optimization_levels
+        - max_file_size
+      properties:
+        name:
+          type: string
+          description: Application name
+        description:
+          type: string
+          description: Application description
+        version:
+          type: string
+          description: Application version
+        endpoints:
+          type: object
+          description: Available API endpoints
+        optimization_levels:
+          type: array
+          items:
+            type: string
+          description: Available optimization levels
+        max_file_size:
+          type: integer
+          format: int64
+          description: Maximum allowed file size in bytes
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - error_code
+        - status
+      properties:
+        error:
+          type: string
+          description: Human-readable error message
+        error_code:
+          type: string
+          description: Machine-readable error code
+        status:
+          type: string
+          enum: [error]
+          description: Error status
+
+  responses:
+    BadRequest:
+      description: Bad request - invalid input parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    Forbidden:
+      description: Forbidden - invalid or missing CSRF token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    RateLimited:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+tags:
+  - name: File Operations
+    description: File upload, optimization, and download operations
+  - name: System
+    description: Health checks, metrics, and system information
+  - name: Maintenance
+    description: Cleanup and maintenance operations

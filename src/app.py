@@ -20,8 +20,10 @@ from stl import mesh
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.utils import secure_filename
 from werkzeug.wrappers import Response as WerkzeugResponse
+from werkzeug.exceptions import HTTPException
 
 from stldeli.stl_optimizer import analyze_stl_mesh, optimize_stl_file
+from security_middleware import SecurityMiddleware, InputSanitizer
 
 # ---------------------------------------------------------------------
 # Flask app configuration
@@ -32,10 +34,28 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 app.config['MAX_CONTENT_LENGTH'] = int(os.environ.get('MAX_CONTENT_LENGTH', 100 * 1024 * 1024))  # 100MB default
 app.config['UPLOAD_FOLDER'] = os.environ.get('UPLOAD_FOLDER', tempfile.gettempdir())
 
+# Initialize security middleware
+security_middleware = SecurityMiddleware(app)
+
 # Logging configuration
 log_level = os.environ.get('LOG_LEVEL', 'INFO').upper()
-logging.basicConfig(level=getattr(logging, log_level, logging.INFO))
+log_format = '%(asctime)s | %(levelname)s | %(filename)s | %(name)s | %(lineno)d | %(message)s'
+
+# Configure logging with both file and console handlers
+logging.basicConfig(
+    level=getattr(logging, log_level, logging.INFO),
+    format=log_format,
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler('logs/app.log', mode='a') if os.path.exists('logs') or os.makedirs('logs', exist_ok=True) else logging.NullHandler()
+    ]
+)
 logger = logging.getLogger(__name__)
+
+# Create separate loggers for different components
+security_logger = logging.getLogger('opti3d.security')
+performance_logger = logging.getLogger('opti3d.performance')
+error_logger = logging.getLogger('opti3d.errors')
 
 # ---------------------------------------------------------------------
 # Security and key management
@@ -82,7 +102,7 @@ CSRF_TOKEN_MSG = 'CSRF token missing or invalid'
 rate_limit_store = {}
 
 def check_rate_limit(client_ip: str, limit: int = 5, window: int = 60) -> bool:
-    """Simple rate limiting implementation."""
+    """Simple rate limiting implementation with enhanced logging."""
     if app.testing:
         return True
 
@@ -90,10 +110,19 @@ def check_rate_limit(client_ip: str, limit: int = 5, window: int = 60) -> bool:
     requests = rate_limit_store.setdefault(client_ip, [])
     rate_limit_store[client_ip] = [t for t in requests if now - t < window]
 
-    if len(rate_limit_store[client_ip]) >= limit:
+    current_count = len(rate_limit_store[client_ip])
+    if current_count >= limit:
+        security_logger.warning(
+            "Rate limit exceeded for IP %s: %d requests (limit: %d)",
+            client_ip, current_count, limit
+        )
         return False
 
     rate_limit_store[client_ip].append(now)
+    security_logger.debug(
+        "Request allowed for IP %s: %d/%d requests used",
+        client_ip, current_count + 1, limit
+    )
     return True
 
 # ---------------------------------------------------------------------
@@ -144,33 +173,191 @@ def add_security_headers(response: Response) -> Response:
     return response
 
 # ---------------------------------------------------------------------
+# Centralized Error Handling
+# ---------------------------------------------------------------------
+
+class Opti3DError(Exception):
+    """Base exception class for Opti3D application."""
+    def __init__(self, message: str, error_code: str = None, status_code: int = 500):
+        super().__init__(message)
+        self.message = message
+        self.error_code = error_code or 'GENERIC_ERROR'
+        self.status_code = status_code
+
+class ValidationError(Opti3DError):
+    """Raised for validation errors."""
+    def __init__(self, message: str):
+        super().__init__(message, 'VALIDATION_ERROR', 400)
+
+class FileProcessingError(Opti3DError):
+    """Raised for file processing errors."""
+    def __init__(self, message: str):
+        super().__init__(message, 'FILE_PROCESSING_ERROR', 500)
+
+class OptimizationError(Opti3DError):
+    """Raised for optimization errors."""
+    def __init__(self, message: str):
+        super().__init__(message, 'OPTIMIZATION_ERROR', 500)
+
+@app.errorhandler(Exception)
+def handle_exception(e: Exception) -> tuple:
+    """Global exception handler with proper logging."""
+    # Log the error with context
+    error_logger.error(
+        "Unhandled exception: %s - %s\nPath: %s\nMethod: %s\nIP: %s",
+        type(e).__name__, str(e), request.path, request.method, request.remote_addr,
+        exc_info=True
+    )
+    
+    # Don't expose internal errors in production
+    if app.testing or app.debug:
+        message = str(e)
+    else:
+        message = "An internal error occurred"
+    
+    return jsonify({
+        'error': message,
+        'error_code': 'INTERNAL_ERROR',
+        'status': 'error'
+    }), 500
+
+@app.errorhandler(HTTPException)
+def handle_http_exception(e: HTTPException) -> tuple:
+    """HTTP exception handler."""
+    security_logger.warning(
+        "HTTP exception: %s - %s\nPath: %s\nMethod: %s\nIP: %s",
+        e.code, e.name, request.path, request.method, request.remote_addr
+    )
+    
+    return jsonify({
+        'error': e.description,
+        'error_code': f'HTTP_{e.code}',
+        'status': 'error'
+    }), e.code
+
+@app.errorhandler(Opti3DError)
+def handle_opti3d_error(e: Opti3DError) -> tuple:
+    """Custom Opti3D exception handler."""
+    error_logger.error(
+        "Opti3D error: %s - %s\nPath: %s\nMethod: %s\nIP: %s",
+        e.error_code, e.message, request.path, request.method, request.remote_addr
+    )
+    
+    return jsonify({
+        'error': e.message,
+        'error_code': e.error_code,
+        'status': 'error'
+    }), e.status_code
+
+# ---------------------------------------------------------------------
 # Utility functions
 # ---------------------------------------------------------------------
 
 def allowed_file(filename: str) -> bool:
-    """Check if file has allowed extension."""
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    """Check if file has allowed extension with enhanced validation."""
+    if not filename or not isinstance(filename, str):
+        return False
+    
+    # Use input sanitizer for enhanced security
+    sanitized_filename = InputSanitizer.sanitize_filename(filename)
+    if not sanitized_filename:
+        security_logger.warning("Filename failed sanitization: %s", filename)
+        return False
+    
+    # Extract extension safely
+    parts = sanitized_filename.rsplit('.', 1)
+    if len(parts) != 2:
+        return False
+    
+    extension = parts[1].lower()
+    is_valid = extension in ALLOWED_EXTENSIONS
+    
+    if not is_valid:
+        security_logger.warning("Invalid file extension attempted: %s", extension)
+    
+    return is_valid
 
 def analyze_stl_file(file_path: str) -> Optional[Dict[str, Any]]:
-    """Analyze STL file and return metadata."""
+    """Analyze STL file and return metadata with enhanced error handling."""
+    start_time = time.time()
+    
     try:
+        # Validate file exists and is readable
+        if not os.path.exists(file_path):
+            raise FileProcessingError(f"File not found: {file_path}")
+        
+        if not os.access(file_path, os.R_OK):
+            raise FileProcessingError(f"File not readable: {file_path}")
+        
+        # Check file size
+        file_size = os.path.getsize(file_path)
+        if file_size == 0:
+            raise ValidationError("STL file is empty")
+        
+        if file_size > app.config['MAX_CONTENT_LENGTH']:
+            raise ValidationError(f"STL file too large: {file_size} bytes")
+        
         mesh_data = mesh.Mesh.from_file(file_path)
-        return analyze_stl_mesh(mesh_data)
-    except (OSError, ValueError, TypeError, AttributeError, KeyError) as e6:
-        logger.error("Error analyzing STL file: %s", str(e6))
-        return None
+        analysis = analyze_stl_mesh(mesh_data)
+        
+        if not analysis:
+            raise FileProcessingError("Failed to analyze STL mesh structure")
+        
+        # Add file metadata
+        analysis['file_size'] = file_size
+        analysis['file_path'] = file_path
+        
+        processing_time = time.time() - start_time
+        performance_logger.info(
+            "STL analysis completed in %.3fs - File: %s, Triangles: %d, Vertices: %d",
+            processing_time, os.path.basename(file_path), analysis.get('triangles', 0), analysis.get('vertices', 0)
+        )
+        
+        return analysis
+        
+    except (OSError, ValueError, TypeError, AttributeError, KeyError) as e:
+        error_logger.error("Error analyzing STL file %s: %s", file_path, str(e))
+        raise FileProcessingError(f"STL file analysis failed: {str(e)}")
 
 def optimize_stl_file_wrapper(file_path: str, optimization_level: str = 'medium') -> str:
-    """Optimize STL file and return path to optimized version."""
+    """Optimize STL file and return path to optimized version with enhanced error handling."""
+    start_time = time.time()
+    
     try:
+        # Validate inputs
+        if not os.path.exists(file_path):
+            raise FileProcessingError(f"Source file not found: {file_path}")
+        
+        if optimization_level not in ['light', 'medium', 'aggressive']:
+            raise ValidationError(f"Invalid optimization level: {optimization_level}")
+        
         optimized_mesh = optimize_stl_file(file_path, optimization_level)
-        optimized_filename = f"optimized_{uuid.uuid4().hex[:8]}.stl"
+        
+        if not optimized_mesh:
+            raise OptimizationError("Optimization failed to produce valid mesh")
+        
+        # Generate secure filename
+        optimized_filename = f"optimized_{uuid.uuid4().hex[:8]}_{int(time.time())}.stl"
         optimized_path = os.path.join(app.config['UPLOAD_FOLDER'], optimized_filename)
+        
+        # Save optimized mesh
         optimized_mesh.save(optimized_path)
+        
+        # Verify the optimized file was created successfully
+        if not os.path.exists(optimized_path) or os.path.getsize(optimized_path) == 0:
+            raise OptimizationError("Optimized file was not created properly")
+        
+        processing_time = time.time() - start_time
+        performance_logger.info(
+            "STL optimization completed in %.3fs - Level: %s, Output: %s",
+            processing_time, optimization_level, optimized_filename
+        )
+        
         return optimized_path
-    except (OSError, ValueError, RuntimeError, TypeError, AttributeError, KeyError) as e5:
-        logger.error("Error optimizing STL file: %s", str(e5))
-        raise
+        
+    except (OSError, ValueError, RuntimeError, TypeError, AttributeError, KeyError) as e:
+        error_logger.error("Error optimizing STL file %s: %s", file_path, str(e))
+        raise OptimizationError(f"STL file optimization failed: {str(e)}")
 
 # ---------------------------------------------------------------------
 # Routes
@@ -184,79 +371,174 @@ def index() -> str:
 
 @app.route('/api/upload', methods=['POST'])
 def upload_file() -> tuple:
-    """Handle STL file upload."""
+    """Handle STL file upload with enhanced validation and error handling."""
+    start_time = time.time()
     client_ip = request.remote_addr
-    if not check_rate_limit(client_ip):
-        return jsonify({'error': RATE_LIMIT_MSG}), 429
-
-    csrf_token = request.headers.get('X-CSRF-Token')
-    if not csrf_token or not validate_csrf_token(csrf_token):
-        return jsonify({'error': CSRF_TOKEN_MSG}), 403
-
+    
     try:
+        # Rate limiting check
+        if not check_rate_limit(client_ip):
+            security_logger.warning("Rate limit exceeded for upload from IP: %s", client_ip)
+            raise ValidationError(RATE_LIMIT_MSG)
+
+        # CSRF token validation
+        csrf_token = request.headers.get('X-CSRF-Token')
+        if not csrf_token or not validate_csrf_token(csrf_token):
+            security_logger.warning("Invalid CSRF token for upload from IP: %s", client_ip)
+            raise ValidationError(CSRF_TOKEN_MSG)
+
+        # Validate request structure
         if 'file' not in request.files:
-            return jsonify({'error': 'No file provided'}), 400
+            raise ValidationError('No file provided')
 
         file = request.files['file']
         if file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
+            raise ValidationError('No file selected')
 
+        # Enhanced file validation
         if not allowed_file(file.filename):
-            return jsonify({'error': 'Invalid file type. Only STL files are allowed'}), 400
+            raise ValidationError('Invalid file type. Only STL files are allowed')
+        
+        # Validate file content
+        file.seek(0, os.SEEK_END)
+        file_size = file.tell()
+        file.seek(0)
+        
+        if file_size == 0:
+            raise ValidationError('Uploaded file is empty')
+        
+        if file_size > app.config['MAX_CONTENT_LENGTH']:
+            raise ValidationError(f'File size {file_size} exceeds maximum allowed size')
 
+        # Sanitize filename and generate unique ID
         filename = secure_filename(file.filename)
+        if not filename:
+            raise ValidationError('Invalid filename after sanitization')
+            
         file_id = str(uuid.uuid4())
         upload_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{file_id}_{filename}")
-        file.save(upload_path)
+        
+        # Save file with error handling
+        try:
+            file.save(upload_path)
+        except Exception as e:
+            error_logger.error("Failed to save uploaded file: %s", str(e))
+            raise FileProcessingError('Failed to save uploaded file')
 
-        analysis = analyze_stl_file(upload_path)
+        # Analyze the uploaded file
+        try:
+            analysis = analyze_stl_file(upload_path)
+        except Exception as e:
+            # Clean up uploaded file if analysis fails
+            _safe_remove(upload_path)
+            raise e
+
         if not analysis:
-            os.remove(upload_path)
-            return jsonify({'error': 'Failed to analyze STL file'}), 400
+            _safe_remove(upload_path)
+            raise FileProcessingError('Failed to analyze STL file')
+
+        processing_time = time.time() - start_time
+        performance_logger.info(
+            "File upload completed in %.3fs - File: %s, Size: %d bytes, IP: %s",
+            processing_time, filename, file_size, client_ip
+        )
 
         return jsonify({
             'file_id': file_id,
             'filename': filename,
             'analysis': analysis,
-            'upload_time': datetime.now().isoformat()
+            'upload_time': datetime.now().isoformat(),
+            'file_size': file_size,
+            'status': 'success'
         }), 200
 
-    except (OSError, ValueError, RuntimeError, TypeError, AttributeError, KeyError) as e4:
-        logger.error("Upload error: %s", str(e4))
-        return jsonify({'error': 'File upload failed'}), 500
+    except Opti3DError:
+        raise
+    except Exception as e:
+        error_logger.error("Unexpected error during file upload: %s", str(e), exc_info=True)
+        raise FileProcessingError('File upload failed')
 
 @app.route('/api/optimize', methods=['POST'])
 def optimize_file() -> tuple:
-    """Optimize uploaded STL file."""
+    """Optimize uploaded STL file with enhanced validation and error handling."""
+    start_time = time.time()
     client_ip = request.remote_addr
-    if not check_rate_limit(client_ip, limit=10):
-        return jsonify({'error': RATE_LIMIT_MSG}), 429
-
-    csrf_token = request.headers.get('X-CSRF-Token')
-    if not csrf_token or not validate_csrf_token(csrf_token):
-        return jsonify({'error': CSRF_TOKEN_MSG}), 403
-
+    
     try:
-        data = request.get_json()
-        if not data or 'file_id' not in data:
-            return jsonify({'error': 'File ID required'}), 400
+        # Rate limiting check
+        if not check_rate_limit(client_ip, limit=10):
+            security_logger.warning("Rate limit exceeded for optimization from IP: %s", client_ip)
+            raise ValidationError(RATE_LIMIT_MSG)
 
-        file_id = data['file_id']
+        # CSRF token validation
+        csrf_token = request.headers.get('X-CSRF-Token')
+        if not csrf_token or not validate_csrf_token(csrf_token):
+            security_logger.warning("Invalid CSRF token for optimization from IP: %s", client_ip)
+            raise ValidationError(CSRF_TOKEN_MSG)
+
+        # Validate and parse JSON data
+        try:
+            data = request.get_json()
+            if data is None:
+                raise ValidationError('Invalid JSON data provided')
+        except Exception as e:
+            if isinstance(e, ValidationError):
+                raise e
+            raise ValidationError('Invalid JSON format')
+        
+        # Validate required fields
+        if 'file_id' not in data:
+            raise ValidationError('File ID required')
+        
+        file_id = str(data['file_id']).strip()
+        if not InputSanitizer.validate_file_id(file_id):
+            raise ValidationError('Invalid file ID format')
+        
         optimization_level = data.get('level', 'medium')
         if optimization_level not in ['light', 'medium', 'aggressive']:
-            return jsonify({'error': 'Invalid optimization level'}), 400
+            raise ValidationError('Invalid optimization level')
 
+        # Find uploaded file
         upload_files = [f for f in os.listdir(app.config['UPLOAD_FOLDER']) if f.startswith(file_id)]
         if not upload_files:
-            return jsonify({'error': 'File not found'}), 404
+            raise ValidationError('File not found')
 
         upload_path = os.path.join(app.config['UPLOAD_FOLDER'], upload_files[0])
-        optimized_path = optimize_stl_file_wrapper(upload_path, optimization_level)
+        
+        # Validate file exists before optimization
+        if not os.path.exists(upload_path):
+            raise ValidationError('Source file no longer exists')
+        
+        # Perform optimization
+        try:
+            optimized_path = optimize_stl_file_wrapper(upload_path, optimization_level)
+        except Exception as e:
+            error_logger.error("Optimization failed for file %s: %s", file_id, str(e))
+            raise e
 
-        original_size = os.path.getsize(upload_path)
-        optimized_size = os.path.getsize(optimized_path)
-        compression_ratio = (1 - optimized_size / original_size) * 100
-        optimized_analysis = analyze_stl_file(optimized_path)
+        # Calculate compression metrics
+        try:
+            original_size = os.path.getsize(upload_path)
+            optimized_size = os.path.getsize(optimized_path)
+            
+            if original_size == 0:
+                raise OptimizationError('Original file size is zero')
+            
+            compression_ratio = (1 - optimized_size / original_size) * 100
+            
+            # Analyze optimized file
+            optimized_analysis = analyze_stl_file(optimized_path)
+            
+        except Exception as e:
+            # Clean up optimized file if metrics calculation fails
+            _safe_remove(optimized_path)
+            raise OptimizationError(f'Failed to calculate optimization metrics: {str(e)}')
+
+        processing_time = time.time() - start_time
+        performance_logger.info(
+            "File optimization completed in %.3fs - Level: %s, Compression: %.1f%%, IP: %s",
+            processing_time, optimization_level, compression_ratio, client_ip
+        )
 
         return jsonify({
             'optimization_level': optimization_level,
@@ -264,96 +546,306 @@ def optimize_file() -> tuple:
             'optimized_size': optimized_size,
             'compression_ratio': round(compression_ratio, 2),
             'optimized_analysis': optimized_analysis,
-            'download_id': os.path.basename(optimized_path)
+            'download_id': os.path.basename(optimized_path),
+            'processing_time': round(processing_time, 3),
+            'status': 'success'
         }), 200
 
-    except (OSError, ValueError, RuntimeError, TypeError, AttributeError, KeyError) as e3:
-        logger.error("Optimization error: %s", str(e3))
-        return jsonify({'error': 'Optimization failed'}), 500
+    except Opti3DError:
+        raise
+    except Exception as e:
+        error_logger.error("Unexpected error during file optimization: %s", str(e), exc_info=True)
+        raise OptimizationError('Optimization failed')
 
 @app.route('/api/download/<filename>')
 def download_file(filename: str) -> Union[WerkzeugResponse, tuple]:
-    """Download optimized STL file."""
+    """Download optimized STL file with enhanced security."""
     try:
+        # Validate filename parameter
+        if not filename or not isinstance(filename, str):
+            raise ValidationError('Invalid filename parameter')
+        
+        # Security checks for filename
+        if '..' in filename or '/' in filename or '\\' in filename:
+            security_logger.warning("Suspicious download filename attempted: %s", filename)
+            raise ValidationError('Invalid filename format')
+        
+        # Ensure filename has expected pattern
+        if not (filename.startswith('optimized_') and filename.endswith('.stl')):
+            security_logger.warning("Invalid download file pattern: %s", filename)
+            raise ValidationError('Invalid file for download')
+        
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        
+        # Validate file exists and is accessible
         if not os.path.exists(file_path):
-            return jsonify({'error': 'File not found'}), 404
-
+            raise ValidationError('File not found')
+        
+        if not os.access(file_path, os.R_OK):
+            raise FileProcessingError('File not accessible for download')
+        
+        # Log download attempt
+        security_logger.info(
+            "File download requested - File: %s, IP: %s",
+            filename, request.remote_addr
+        )
+        
         return send_file(
             file_path,
             as_attachment=True,
-            download_name=f'optimized_{filename}',
+            download_name=f'optimized_{filename.replace("optimized_", "")}',
             mimetype='application/octet-stream'
         )
 
-    except (OSError, ValueError, TypeError, AttributeError, KeyError) as e2:
-        logger.error("Download error: %s", str(e2))
-        return jsonify({'error': 'Download failed'}), 500
+    except Opti3DError:
+        raise
+    except Exception as e:
+        error_logger.error("Unexpected error during file download: %s", str(e), exc_info=True)
+        raise FileProcessingError('Download failed')
 
 @app.route('/api/cleanup', methods=['POST'])
 def cleanup_files() -> tuple:
-    """Clean up temporary files."""
+    """Clean up temporary files with enhanced validation."""
+    start_time = time.time()
     client_ip = request.remote_addr
-    if not check_rate_limit(client_ip, limit=20):
-        return jsonify({'error': RATE_LIMIT_MSG}), 429
-
-    csrf_token = request.headers.get('X-CSRF-Token')
-    if not csrf_token or not validate_csrf_token(csrf_token):
-        return jsonify({'error': CSRF_TOKEN_MSG}), 403
-
+    
     try:
-        data = request.get_json()
+        # Rate limiting check
+        if not check_rate_limit(client_ip, limit=20):
+            security_logger.warning("Rate limit exceeded for cleanup from IP: %s", client_ip)
+            raise ValidationError(RATE_LIMIT_MSG)
+
+        # CSRF token validation
+        csrf_token = request.headers.get('X-CSRF-Token')
+        if not csrf_token or not validate_csrf_token(csrf_token):
+            security_logger.warning("Invalid CSRF token for cleanup from IP: %s", client_ip)
+            raise ValidationError(CSRF_TOKEN_MSG)
+
+        # Validate and parse JSON data
+        try:
+            data = request.get_json() or {}
+        except Exception:
+            data = {}
+        
+        files_removed = 0
+        
         if data and 'file_id' in data:
-            _cleanup_by_file_id(data['file_id'])
+            # Clean up specific file
+            file_id = str(data['file_id']).strip()
+            if file_id and len(file_id) >= 10:
+                files_removed = _cleanup_by_file_id(file_id)
+                security_logger.info(
+                    "Specific file cleanup completed - File ID: %s, Files removed: %d, IP: %s",
+                    file_id, files_removed, client_ip
+                )
         else:
-            _cleanup_expired_files()
+            # Clean up expired files
+            files_removed = _cleanup_expired_files()
+            security_logger.info(
+                "Expired file cleanup completed - Files removed: %d, IP: %s",
+                files_removed, client_ip
+            )
 
-        return jsonify({'message': 'Cleanup completed'}), 200
+        processing_time = time.time() - start_time
+        performance_logger.info(
+            "File cleanup completed in %.3fs - Files removed: %d",
+            processing_time, files_removed
+        )
 
-    except (OSError, ValueError, TypeError, AttributeError, KeyError) as e1:
-        logger.error("Cleanup error: %s", str(e1))
-        return jsonify({'error': 'Cleanup failed'}), 500
+        return jsonify({
+            'message': 'Cleanup completed',
+            'files_removed': files_removed,
+            'processing_time': round(processing_time, 3),
+            'status': 'success'
+        }), 200
+
+    except Opti3DError:
+        raise
+    except Exception as e:
+        error_logger.error("Unexpected error during cleanup: %s", str(e), exc_info=True)
+        raise FileProcessingError('Cleanup failed')
 
 
-def _cleanup_by_file_id(file_id: str) -> None:
-    """Remove all temporary files associated with a given file_id."""
+def _cleanup_by_file_id(file_id: str) -> int:
+    """Remove all temporary files associated with a given file_id and return count."""
     folder = app.config['UPLOAD_FOLDER']
-    upload_files = [f for f in os.listdir(folder) if f.startswith(file_id)]
+    files_removed = 0
+    
+    try:
+        upload_files = [f for f in os.listdir(folder) if f.startswith(file_id)]
+        
+        for filename in upload_files:
+            if _safe_remove(os.path.join(folder, filename)):
+                files_removed += 1
+                
+    except OSError as e:
+        error_logger.error("Error during file cleanup for ID %s: %s", file_id, str(e))
+    
+    return files_removed
 
-    for filename in upload_files:
-        _safe_remove(os.path.join(folder, filename))
 
-
-def _cleanup_expired_files(expiry_seconds: int = 3600) -> None:
-    """Remove temporary STL files older than expiry_seconds."""
+def _cleanup_expired_files(expiry_seconds: int = 3600) -> int:
+    """Remove temporary STL files older than expiry_seconds and return count."""
     folder = app.config['UPLOAD_FOLDER']
     current_time = datetime.now()
+    files_removed = 0
 
-    for filename in os.listdir(folder):
-        if not filename.endswith('.stl'):
-            continue
+    try:
+        for filename in os.listdir(folder):
+            if not filename.endswith('.stl'):
+                continue
 
-        file_path = os.path.join(folder, filename)
-        file_time = datetime.fromtimestamp(os.path.getctime(file_path))
+            file_path = os.path.join(folder, filename)
+            
+            try:
+                file_time = datetime.fromtimestamp(os.path.getctime(file_path))
+                
+                if (current_time - file_time).seconds > expiry_seconds:
+                    if _safe_remove(file_path):
+                        files_removed += 1
+                        
+            except OSError:
+                # Skip files that can't be accessed
+                continue
+                
+    except OSError as e:
+        error_logger.error("Error during expired files cleanup: %s", str(e))
+    
+    return files_removed
 
-        if (current_time - file_time).seconds > expiry_seconds:
-            _safe_remove(file_path)
 
-
-def _safe_remove(path: str) -> None:
-    """Attempt to remove a file, ignoring common OS errors."""
+def _safe_remove(path: str) -> bool:
+    """Attempt to remove a file, returning True if successful."""
     try:
         os.remove(path)
+        return True
     except OSError:
-        pass
+        return False
+
+# ---------------------------------------------------------------------
+# Health Check and Monitoring Endpoints
+# ---------------------------------------------------------------------
+
+@app.route('/api/health')
+def health_check() -> tuple:
+    """Basic health check endpoint."""
+    try:
+        # Check upload directory
+        upload_dir_accessible = os.access(app.config['UPLOAD_FOLDER'], os.W_OK)
+        
+        # Check disk space (basic check)
+        try:
+            import shutil
+            disk_usage = shutil.disk_usage(app.config['UPLOAD_FOLDER'])
+            disk_space_ok = disk_usage.free > 100 * 1024 * 1024  # At least 100MB free
+        except Exception:
+            disk_space_ok = False
+        
+        # Check memory usage (basic check)
+        try:
+            import psutil
+            memory = psutil.virtual_memory()
+            memory_ok = memory.percent < 90  # Less than 90% used
+        except ImportError:
+            memory_ok = True  # Can't check, assume OK
+        
+        status = 'healthy' if all([upload_dir_accessible, disk_space_ok, memory_ok]) else 'degraded'
+        
+        return jsonify({
+            'status': status,
+            'timestamp': datetime.now().isoformat(),
+            'version': '1.0.0',
+            'checks': {
+                'upload_directory': 'ok' if upload_dir_accessible else 'error',
+                'disk_space': 'ok' if disk_space_ok else 'warning',
+                'memory': 'ok' if memory_ok else 'warning'
+            }
+        }), 200 if status == 'healthy' else 503
+        
+    except Exception as e:
+        error_logger.error("Health check failed: %s", str(e))
+        return jsonify({
+            'status': 'unhealthy',
+            'timestamp': datetime.now().isoformat(),
+            'error': 'Health check failed'
+        }), 503
+
+@app.route('/api/metrics')
+def get_metrics() -> tuple:
+    """Get application metrics."""
+    try:
+        # Count files in upload directory
+        try:
+            upload_files = [f for f in os.listdir(app.config['UPLOAD_FOLDER']) if f.endswith('.stl')]
+            file_count = len(upload_files)
+            
+            # Calculate total size
+            total_size = sum(
+                os.path.getsize(os.path.join(app.config['UPLOAD_FOLDER'], f)) 
+                for f in upload_files
+            )
+        except Exception:
+            file_count = 0
+            total_size = 0
+        
+        # Rate limit stats
+        active_ips = len(rate_limit_store)
+        
+        return jsonify({
+            'timestamp': datetime.now().isoformat(),
+            'metrics': {
+                'uploaded_files': file_count,
+                'total_storage_used': total_size,
+                'active_rate_limited_ips': active_ips,
+                'uptime_seconds': time.time() - app.start_time if hasattr(app, 'start_time') else 0
+            }
+        }), 200
+        
+    except Exception as e:
+        error_logger.error("Metrics collection failed: %s", str(e))
+        return jsonify({'error': 'Failed to collect metrics'}), 500
+
+@app.route('/api/info')
+def get_app_info() -> tuple:
+    """Get application information."""
+    return jsonify({
+        'name': 'Opti3D',
+        'description': 'STL File Optimization Service',
+        'version': '1.0.0',
+        'endpoints': {
+            'upload': 'POST /api/upload',
+            'optimize': 'POST /api/optimize',
+            'download': 'GET /api/download/<filename>',
+            'cleanup': 'POST /api/cleanup',
+            'health': 'GET /api/health',
+            'metrics': 'GET /api/metrics'
+        },
+        'optimization_levels': ['light', 'medium', 'aggressive'],
+        'max_file_size': app.config['MAX_CONTENT_LENGTH']
+    }), 200
 
 # ---------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------
 
 if __name__ == '__main__':
+    # Record application start time
+    app.start_time = time.time()
+    
     debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
     host = os.environ.get('FLASK_HOST', '127.0.0.1')
+    port = int(os.environ.get('FLASK_PORT', 5000))
+    
     if host == '0.0.0.0':
-        logger.warning("Binding to all interfaces (0.0.0.0). Ensure firewall is properly configured.")
-    app.run(debug=debug_mode, host=host, port=5000)
+        security_logger.warning("Binding to all interfaces (0.0.0.0). Ensure firewall is properly configured.")
+    
+    logger.info(
+        "Starting Opti3D application - Host: %s, Port: %d, Debug: %s",
+        host, port, debug_mode
+    )
+    
+    try:
+        app.run(debug=debug_mode, host=host, port=port)
+    except Exception as e:
+        error_logger.critical("Failed to start application: %s", str(e), exc_info=True)
+        raise

@@ -272,11 +272,11 @@ class TestIntegrationWorkflow(unittest.TestCase):
             content_type='application/json',
             headers={'X-CSRF-Token': csrf_token}
         )
-        self.assertEqual(optimize_response.status_code, 404)
+        self.assertEqual(optimize_response.status_code, 400)
 
         # Try to download nonexistent file
         download_response = self.client.get('/api/download/nonexistent.stl')
-        self.assertEqual(download_response.status_code, 404)
+        self.assertEqual(download_response.status_code, 400)
 
         # Try to upload invalid file type
         data = {'file': (io.BytesIO(b'test content'), 'test.txt', 'text/plain')}

@@ -1,0 +1,322 @@
+name: Opti3D CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  release:
+    types: [ published ]
+
+env:
+  PYTHON_VERSION: '3.9'
+  NODE_VERSION: '18'
+
+jobs:
+  # Security and Code Quality Checks
+  security-tests:
+    name: Security & Quality Checks
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r src/requirements.txt
+        pip install -r test-requirements.txt
+        pip install safety bandit flake8 pylint pytest-cov
+        
+    - name: Run security vulnerability scan (safety)
+      run: |
+        echo "🔒 Checking for known security vulnerabilities in dependencies..."
+        safety check --json --output safety-report.json || true
+        safety check
+        
+    - name: Run static security analysis (bandit)
+      run: |
+        echo "🔍 Running static security analysis..."
+        bandit -r src/ -f json -o bandit-report.json || true
+        bandit -r src/
+        
+    - name: Run code quality checks (flake8)
+      run: |
+        echo "📊 Running code quality checks..."
+        flake8 src/ --max-line-length=100 --ignore=E501,W503 --format=json --output-file=flake8-report.json || true
+        flake8 src/ --max-line-length=100 --ignore=E501,W503
+        
+    - name: Run code quality checks (pylint)
+      run: |
+        echo "📈 Running comprehensive code analysis..."
+        pylint src/ --output-format=json --output-file=pylint-report.json || true
+        pylint src/ --exit-zero
+        
+    - name: Run security compliance tests
+      run: |
+        echo "🛡️ Running security compliance tests..."
+        python -m pytest tests/test_security_compliance.py -v --tb=short --cov=src --cov-report=xml --cov-report=html
+        
+    - name: Run Flask security tests
+      run: |
+        echo "🔐 Running Flask security feature tests..."
+        python -m pytest tests/test_flask_app.py::TestSecurityFeatures -v --tb=short
+        
+    - name: Upload security reports
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: security-reports
+        path: |
+          safety-report.json
+          bandit-report.json
+          flake8-report.json
+          pylint-report.json
+          htmlcov/
+          
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      if: github.event_name != 'release'
+      with:
+        file: ./coverage.xml
+        flags: security
+        name: security-coverage
+
+  # Functional Tests
+  functional-tests:
+    name: Functional Tests
+    runs-on: ubuntu-latest
+    needs: security-tests
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r src/requirements.txt
+        pip install -r test-requirements.txt
+        
+    - name: Run STL optimizer tests
+      run: |
+        echo "🔧 Testing STL optimizer functionality..."
+        python -m pytest tests/test_stl_optimizer.py -v --tb=short --cov=src --cov-report=xml
+        
+    - name: Run Flask app tests
+      run: |
+        echo "🌐 Testing Flask application..."
+        python -m pytest tests/test_flask_app.py -v --tb=short --cov=src --cov-report=xml
+        
+    - name: Run integration tests
+      run: |
+        echo "🔗 Running integration tests..."
+        python -m pytest tests/test_integration.py -v --tb=short --cov=src --cov-report=xml
+        
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: functional
+        name: functional-coverage
+
+  # Build and Package
+  build:
+    name: Build Package
+    runs-on: ubuntu-latest
+    needs: [security-tests, functional-tests]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: Install build dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build twine wheel
+        
+    - name: Build package
+      run: |
+        cd src
+        python -m build
+        
+    - name: Check package
+      run: |
+        cd src/dist
+        twine check *
+        
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: python-package
+        path: src/dist/
+
+  # Docker Build (for deployment)
+  docker-build:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: [security-tests, functional-tests]
+    if: github.ref == 'refs/heads/main' || github.event_name == 'release'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      
+    - name: Login to Docker Hub
+      if: github.event_name == 'release'
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+        
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: wilsonify/opti3d
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: ${{ github.event_name == 'release' }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  # Deploy to Staging
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.ref == 'refs/heads/develop'
+    environment: staging
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Download build artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: python-package
+        path: dist/
+        
+    - name: Deploy to staging
+      run: |
+        echo "🚀 Deploying to staging environment..."
+        # Add your staging deployment commands here
+        # Example: Deploy to cloud provider, staging server, etc.
+        
+    - name: Run smoke tests
+      run: |
+        echo "💨 Running smoke tests on staging..."
+        # Add smoke test commands here
+
+  # Deploy to Production
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [build, docker-build]
+    if: github.event_name == 'release'
+    environment: production
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Download build artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: python-package
+        path: dist/
+        
+    - name: Deploy to production
+      run: |
+        echo "🎉 Deploying to production environment..."
+        # Add your production deployment commands here
+        
+    - name: Run production health checks
+      run: |
+        echo "🏥 Running production health checks..."
+        # Add health check commands here
+
+  # Documentation Build
+  docs:
+    name: Build Documentation
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r src/requirements.txt
+        pip install sphinx sphinx-rtd-theme
+        
+    - name: Build documentation
+      run: |
+        cd docs
+        make html
+        
+    - name: Deploy documentation to GitHub Pages
+      if: github.ref == 'refs/heads/main'
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./docs/_build/html
+
+  # Notification
+  notify:
+    name: Notify Results
+    runs-on: ubuntu-latest
+    needs: [security-tests, functional-tests, build]
+    if: always()
+    
+    steps:
+    - name: Notify on success
+      if: ${{ needs.security-tests.result == 'success' && needs.functional-tests.result == 'success' && needs.build.result == 'success' }}
+      run: |
+        echo "✅ All tests passed and build successful!"
+        # Add Slack/Teams/email notification here
+        
+    - name: Notify on failure
+      if: ${{ needs.security-tests.result == 'failure' || needs.functional-tests.result == 'failure' || needs.build.result == 'failure' }}
+      run: |
+        echo "❌ Pipeline failed! Check the logs for details."
+        # Add Slack/Teams/email notification here

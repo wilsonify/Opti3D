@@ -516,6 +516,11 @@
     });
 
     async function handleFileUpload(file) {
+        // Reset previous state
+        hideProgress();
+        removeFile();
+        
+        // Validate file
         if (!file.name.toLowerCase().endsWith('.stl')) {
             showNotification('Please upload an STL file', 'error');
             return;
@@ -525,36 +530,69 @@
             showNotification('File size must be less than 100MB', 'error');
             return;
         }
+        
+        if (file.size === 0) {
+            showNotification('File is empty', 'error');
+            return;
+        }
 
         const formData = new FormData();
         formData.append('file', file);
 
-        showProgress('Uploading file...', 20);
+        showProgress('Validating file...', 10);
+        
+        // Add retry logic
+        const maxRetries = 3;
+        let retryCount = 0;
+        
+        while (retryCount < maxRetries) {
+            try {
+                showProgress('Uploading file...', 20 + (retryCount * 20));
+                
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-Token': getCsrfToken()
+                    },
+                    body: formData
+                });
 
-        try {
-            const response = await fetch('/api/upload', {
-                method: 'POST',
-                headers: {
-                    'X-CSRF-Token': getCsrfToken()
-                },
-                body: formData
-            });
+                const result = await response.json();
 
-            const result = await response.json();
+                if (!response.ok) {
+                    // Handle specific error codes
+                    if (response.status === 429) {
+                        showNotification('Rate limit exceeded. Please wait before trying again.', 'warning');
+                        return;
+                    } else if (response.status === 403) {
+                        showNotification('Security token expired. Please refresh the page.', 'error');
+                        return;
+                    } else {
+                        throw new Error(result.error || 'Upload failed');
+                    }
+                }
 
-            if (!response.ok) {
-                throw new Error(result.error || 'Upload failed');
+                uploadedFile = result;
+                displayFileInfo(result);
+                displayAnalysis(result.analysis);
+                showOptimizationSection();
+                hideProgress();
+                
+                showNotification('File uploaded successfully!', 'success');
+                return;
+
+            } catch (error) {
+                retryCount++;
+                
+                if (retryCount >= maxRetries) {
+                    showNotification(`Upload failed: ${error.message}`, 'error');
+                    hideProgress();
+                } else {
+                    showProgress(`Retrying... (${retryCount}/${maxRetries})`, 20 + (retryCount * 20));
+                    // Exponential backoff
+                    await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount - 1)));
+                }
             }
-
-            uploadedFile = result;
-            displayFileInfo(result);
-            displayAnalysis(result.analysis);
-            showOptimizationSection();
-            hideProgress();
-
-        } catch (error) {
-            showNotification(error.message, 'error');
-            hideProgress();
         }
     }
 
@@ -593,9 +631,17 @@
 
         const optimizationLevel = document.querySelector('input[name="optimizationLevel"]:checked').value;
         
-        showProgress('Optimizing file...', 50);
-
+        // Disable optimize button during processing
+        const optimizeBtn = document.getElementById('optimizeBtn');
+        const originalText = optimizeBtn.innerHTML;
+        optimizeBtn.disabled = true;
+        optimizeBtn.innerHTML = '<i data-lucide="loader-2" class="w-6 h-6 mr-3 animate-spin"></i>Processing...';
+        
+        showProgress('Analyzing file structure...', 30);
+        
         try {
+            showProgress('Optimizing mesh...', 50);
+            
             const response = await fetch('/api/optimize', {
                 method: 'POST',
                 headers: {
@@ -611,30 +657,86 @@
             const result = await response.json();
 
             if (!response.ok) {
-                throw new Error(result.error || 'Optimization failed');
+                // Handle specific error codes
+                if (response.status === 429) {
+                    showNotification('Rate limit exceeded. Please wait before trying again.', 'warning');
+                } else if (response.status === 403) {
+                    showNotification('Security token expired. Please refresh the page.', 'error');
+                } else if (response.status === 404) {
+                    showNotification('File not found. Please upload again.', 'error');
+                } else {
+                    throw new Error(result.error || 'Optimization failed');
+                }
+                return;
             }
 
+            showProgress('Finalizing optimization...', 80);
+            
             optimizationResult = result;
             displayResults(result);
             hideProgress();
+            
+            showNotification(`File optimized successfully! Compression: ${result.compression_ratio}%`, 'success');
 
         } catch (error) {
-            showNotification(error.message, 'error');
+            showNotification(`Optimization failed: ${error.message}`, 'error');
             hideProgress();
+        } finally {
+            // Re-enable optimize button
+            optimizeBtn.disabled = false;
+            optimizeBtn.innerHTML = originalText;
+            lucide.createIcons();
         }
     }
 
     function displayResults(result) {
+        // Update file comparison
         document.getElementById('originalSize').textContent = formatFileSize(result.original_size);
         document.getElementById('optimizedSize').textContent = formatFileSize(result.optimized_size);
         document.getElementById('compressionRatio').textContent = result.compression_ratio + '%';
         
+        // Update optimized stats
         if (result.optimized_analysis) {
             document.getElementById('optimizedTriangles').textContent = result.optimized_analysis.triangles.toLocaleString();
             document.getElementById('optimizedVertices').textContent = result.optimized_analysis.vertices.toLocaleString();
         }
+        
+        // Update optimization level display
+        const levelDisplay = document.getElementById('optimizationLevelDisplay');
+        levelDisplay.textContent = result.optimization_level;
+        
+        // Add color coding for compression ratio
+        const compressionElement = document.getElementById('compressionRatio');
+        compressionElement.className = 'font-bold ';
+        if (result.compression_ratio > 40) {
+            compressionElement.className += 'text-green-600';
+        } else if (result.compression_ratio > 20) {
+            compressionElement.className += 'text-blue-600';
+        } else {
+            compressionElement.className += 'text-orange-600';
+        }
+        
+        // Add processing time if available
+        if (result.processing_time) {
+            const processingInfo = document.createElement('div');
+            processingInfo.className = 'text-sm text-gray-500 mt-2';
+            processingInfo.textContent = `Processing time: ${result.processing_time.toFixed(2)}s`;
+            
+            const resultsSection = document.getElementById('resultsSection');
+            const existingInfo = resultsSection.querySelector('.text-sm.text-gray-500.mt-2');
+            if (existingInfo) {
+                existingInfo.remove();
+            }
+            resultsSection.querySelector('.text-center.mb-8').appendChild(processingInfo);
+        }
 
         document.getElementById('resultsSection').classList.remove('hidden');
+        
+        // Smooth scroll to results
+        document.getElementById('resultsSection').scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'start' 
+        });
     }
 
     function downloadFile() {
@@ -643,7 +745,41 @@
             return;
         }
 
-        window.location.href = `/api/download/${optimizationResult.download_id}`;
+        // Show download progress
+        const downloadBtn = document.getElementById('downloadBtn');
+        const originalText = downloadBtn.innerHTML;
+        downloadBtn.disabled = true;
+        downloadBtn.innerHTML = '<i data-lucide="loader-2" class="w-6 h-6 mr-3 animate-spin"></i>Preparing download...';
+        
+        // Create download link
+        const downloadUrl = `/api/download/${optimizationResult.download_id}`;
+        
+        // Fetch to check if file exists before download
+        fetch(downloadUrl, { method: 'HEAD' })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('File not available for download');
+                }
+                
+                // Create temporary link for download
+                const link = document.createElement('a');
+                link.href = downloadUrl;
+                link.download = `optimized_${uploadedFile.filename}`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                showNotification('Download started successfully!', 'success');
+            })
+            .catch(error => {
+                showNotification(`Download failed: ${error.message}`, 'error');
+            })
+            .finally(() => {
+                // Restore button
+                downloadBtn.disabled = false;
+                downloadBtn.innerHTML = originalText;
+                lucide.createIcons();
+            });
     }
 
     function resetAll() {
