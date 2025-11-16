@@ -387,7 +387,7 @@ def upload_file() -> tuple:
             security_logger.warning("Invalid CSRF token for upload from IP: %s", client_ip)
             raise ValidationError(CSRF_TOKEN_MSG)
 
-        # Validate request structure
+        # Validate request structure and save file
         if 'file' not in request.files:
             raise ValidationError('No file provided')
 
@@ -395,62 +395,11 @@ def upload_file() -> tuple:
         if file.filename == '':
             raise ValidationError('No file selected')
 
-        # Enhanced file validation
-        if not allowed_file(file.filename):
-            raise ValidationError('Invalid file type. Only STL files are allowed')
-        
-        # Validate file content
-        file.seek(0, os.SEEK_END)
-        file_size = file.tell()
-        file.seek(0)
-        
-        if file_size == 0:
-            raise ValidationError('Uploaded file is empty')
-        
-        if file_size > app.config['MAX_CONTENT_LENGTH']:
-            raise ValidationError(f'File size {file_size} exceeds maximum allowed size')
+        # Delegate detailed validation and saving to helper
+        upload_path, filename, file_size, file_id = _validate_and_save_upload(file)
 
-        # Sanitize filename and generate unique ID
-        filename = secure_filename(file.filename)
-        if not filename:
-            raise ValidationError('Invalid filename after sanitization')
-            
-        file_id = str(uuid.uuid4())
-        upload_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{file_id}_{filename}")
-        
-        # Save file with error handling
-        try:
-            file.save(upload_path)
-        except Exception as e:
-            error_logger.error("Failed to save uploaded file: %s", str(e))
-            raise FileProcessingError('Failed to save uploaded file')
-
-        # Analyze the uploaded file
-        try:
-            analysis = analyze_stl_file(upload_path)
-        except Exception as e:
-            # Clean up uploaded file if analysis fails
-            _safe_remove(upload_path)
-            raise e
-
-        if not analysis:
-            _safe_remove(upload_path)
-            raise FileProcessingError('Failed to analyze STL file')
-
-        processing_time = time.time() - start_time
-        performance_logger.info(
-            "File upload completed in %.3fs - File: %s, Size: %d bytes, IP: %s",
-            processing_time, filename, file_size, client_ip
-        )
-
-        return jsonify({
-            'file_id': file_id,
-            'filename': filename,
-            'analysis': analysis,
-            'upload_time': datetime.now().isoformat(),
-            'file_size': file_size,
-            'status': 'success'
-        }), 200
+        # Analyze and build response
+        return _analyze_and_build_response(upload_path, filename, file_size, file_id, start_time, client_ip)
 
     except Opti3DError:
         raise
@@ -469,45 +418,8 @@ def optimize_file() -> tuple:
         if not check_rate_limit(client_ip, limit=10):
             security_logger.warning("Rate limit exceeded for optimization from IP: %s", client_ip)
             raise ValidationError(RATE_LIMIT_MSG)
-
-        # CSRF token validation
-        csrf_token = request.headers.get('X-CSRF-Token')
-        if not csrf_token or not validate_csrf_token(csrf_token):
-            security_logger.warning("Invalid CSRF token for optimization from IP: %s", client_ip)
-            raise ValidationError(CSRF_TOKEN_MSG)
-
-        # Validate and parse JSON data
-        try:
-            data = request.get_json()
-            if data is None:
-                raise ValidationError('Invalid JSON data provided')
-        except Exception as e:
-            if isinstance(e, ValidationError):
-                raise e
-            raise ValidationError('Invalid JSON format')
-        
-        # Validate required fields
-        if 'file_id' not in data:
-            raise ValidationError('File ID required')
-        
-        file_id = str(data['file_id']).strip()
-        if not InputSanitizer.validate_file_id(file_id):
-            raise ValidationError('Invalid file ID format')
-        
-        optimization_level = data.get('level', 'medium')
-        if optimization_level not in ['light', 'medium', 'aggressive']:
-            raise ValidationError('Invalid optimization level')
-
-        # Find uploaded file
-        upload_files = [f for f in os.listdir(app.config['UPLOAD_FOLDER']) if f.startswith(file_id)]
-        if not upload_files:
-            raise ValidationError('File not found')
-
-        upload_path = os.path.join(app.config['UPLOAD_FOLDER'], upload_files[0])
-        
-        # Validate file exists before optimization
-        if not os.path.exists(upload_path):
-            raise ValidationError('Source file no longer exists')
+        # CSRF token validation and input parsing
+        upload_path, file_id, optimization_level = _parse_optimize_request()
         
         # Perform optimization
         try:
@@ -721,6 +633,126 @@ def _safe_remove(path: str) -> bool:
         return True
     except OSError:
         return False
+
+
+def _parse_optimize_request():
+    """Parse and validate the optimization request payload and return (upload_path, file_id, optimization_level)."""
+    data = _validate_csrf_and_get_json()
+
+    # Validate required fields
+    if 'file_id' not in data:
+        raise ValidationError('File ID required')
+
+    file_id = str(data['file_id']).strip()
+    if not InputSanitizer.validate_file_id(file_id):
+        raise ValidationError('Invalid file ID format')
+
+    optimization_level = data.get('level', 'medium')
+    if optimization_level not in ['light', 'medium', 'aggressive']:
+        raise ValidationError('Invalid optimization level')
+
+    upload_path = _find_upload_path_for_file_id(file_id)
+
+    return upload_path, file_id, optimization_level
+
+
+def _validate_csrf_and_get_json():
+    """Validate CSRF token and return parsed JSON body."""
+    csrf_token = request.headers.get('X-CSRF-Token')
+    if not csrf_token or not validate_csrf_token(csrf_token):
+        security_logger.warning("Invalid CSRF token for optimization from IP: %s", request.remote_addr)
+        raise ValidationError(CSRF_TOKEN_MSG)
+
+    try:
+        data = request.get_json()
+        if data is None:
+            raise ValidationError('Invalid JSON data provided')
+        return data
+    except Exception:
+        raise ValidationError('Invalid JSON format')
+
+
+def _find_upload_path_for_file_id(file_id: str) -> str:
+    """Return the upload path for a given file_id or raise ValidationError if not found."""
+    upload_files = [f for f in os.listdir(app.config['UPLOAD_FOLDER']) if f.startswith(file_id)]
+    if not upload_files:
+        raise ValidationError('File not found')
+
+    upload_path = os.path.join(app.config['UPLOAD_FOLDER'], upload_files[0])
+    if not os.path.exists(upload_path):
+        raise ValidationError('Source file no longer exists')
+
+    return upload_path
+
+
+def _validate_and_save_upload(file) -> tuple:
+    """Validate an uploaded FileStorage, save it to upload folder and return (path, filename, size).
+
+    Raises ValidationError or FileProcessingError on failure.
+    """
+    # Enhanced file validation
+    if not allowed_file(file.filename):
+        raise ValidationError('Invalid file type. Only STL files are allowed')
+
+    # Validate file content
+    file.seek(0, os.SEEK_END)
+    file_size = file.tell()
+    file.seek(0)
+
+    if file_size == 0:
+        raise ValidationError('Uploaded file is empty')
+
+    if file_size > app.config['MAX_CONTENT_LENGTH']:
+        raise ValidationError(f'File size {file_size} exceeds maximum allowed size')
+
+    # Sanitize filename and generate unique ID
+    filename = secure_filename(file.filename)
+    if not filename:
+        raise ValidationError('Invalid filename after sanitization')
+
+    file_id = str(uuid.uuid4())
+    upload_path = os.path.join(app.config['UPLOAD_FOLDER'], f"{file_id}_{filename}")
+
+    # Save file with error handling
+    try:
+        file.save(upload_path)
+    except Exception as e:
+        error_logger.error("Failed to save uploaded file: %s", str(e))
+        raise FileProcessingError('Failed to save uploaded file')
+
+    return upload_path, filename, file_size, file_id
+
+
+def _analyze_and_build_response(upload_path: str, filename: str, file_size: int, file_id: str, start_time: float, client_ip: str):
+    """Analyze uploaded file and return the Flask response tuple.
+
+    This helper centralizes analysis, cleanup on failure and response formatting
+    to keep the route handler small and focused.
+    """
+    try:
+        analysis = analyze_stl_file(upload_path)
+    except Exception as e:
+        _safe_remove(upload_path)
+        raise e
+
+    if not analysis:
+        _safe_remove(upload_path)
+        raise FileProcessingError('Failed to analyze STL file')
+
+    processing_time = time.time() - start_time
+    performance_logger.info(
+        "File upload completed in %.3fs - File: %s, Size: %d bytes, IP: %s",
+        processing_time, filename, file_size, client_ip
+    )
+
+    return jsonify({
+        'file_id': file_id,
+        'filename': filename,
+        'analysis': analysis,
+        'upload_time': datetime.now().isoformat(),
+        'file_size': file_size,
+        'status': 'success'
+    }), 200
 
 # ---------------------------------------------------------------------
 # Health Check and Monitoring Endpoints

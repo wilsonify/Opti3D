@@ -252,6 +252,19 @@ class SecurityMiddleware:
                 self.get_client_ip(), len(request.query_string)
             )
             self.block_request("Query string too long")
+        
+        # Check total header size to defend against header attacks
+        try:
+            headers_total = sum(len(k) + len(v) for k, v in request.headers.items())
+        except Exception:
+            headers_total = 0
+
+        if headers_total > max_header_length:
+            security_logger.warning(
+                "Oversized headers detected - IP: %s, TotalHeaderBytes: %d",
+                self.get_client_ip(), headers_total
+            )
+            self.block_request("Headers too large")
     
     def check_user_agent(self):
         """Check for suspicious user agents"""

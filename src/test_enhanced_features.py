@@ -51,11 +51,11 @@ class TestEnhancedSecurity(unittest.TestCase):
 
         # Make multiple requests quickly
         responses = []
-        for i in range(6):  # Exceed default limit of 5
-            response = self.app.post('/api/upload',
+        for _ in range(6):  # Exceed default limit of 5
+            resp = self.app.post('/api/upload',
                                      data={'file': (tempfile.NamedTemporaryFile().read(), 'test.stl')},
                                      headers={'X-CSRF-Token': 'test_token'})
-            responses.append(response)
+            responses.append(resp)
 
         # At least one should be rate limited
         rate_limited = any(r.status_code == 429 for r in responses)
@@ -104,8 +104,8 @@ class TestEnhancedErrorHandling(unittest.TestCase):
             with self.app.session_transaction() as sess:
                 sess['csrf_token'] = 'test_token'
 
-            # Trigger an error
-            response = self.app.post('/api/upload',
+            # Trigger an error (response not needed)
+            self.app.post('/api/upload',
                                      data={'file': (b'content', 'test.txt')},
                                      headers={'X-CSRF-Token': 'test_token'})
             

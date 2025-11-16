@@ -397,7 +397,7 @@ class TestFileOperations(unittest.TestCase):
 
         # File should be stored in temp directory
         self.assertIsNotNone(file_id)
-        self.assertTrue(len(file_id) > 0)
+        self.assertGreater(len(file_id), 0)
 
         # Cleanup should work
         cleanup_response = self.app.post('/api/cleanup',
